@@ -1,0 +1,22 @@
+# Config file of Snakefile fastq2bam
+# Load environment from within jonasl environment with $ conda activate fastq2bam
+
+metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2021APR10.tsv
+
+ref:
+    species: "Lynx canadensis"
+    assembly: "mLynCan4.pri.v2"
+    chromosome_tag: "CM"
+    file: /media/labgenoma4/DATAPART7/duda_grupo/references/mLynCan4.pri.v2/GCA_007474595.2_mLynCan4.pri.v2_genomic.fna.gz
+
+output:
+    bam: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/bam_mLynCan4.pri.v2
+    
+# Uses Trimmomatic
+trim:
+    jar: /media/labgenoma4/DATAPART4/jonasl/bin/Trimmomatic-0.39/trimmomatic-0.39.jar
+    libr: /media/labgenoma4/DATAPART4/jonasl/bin/Trimmomatic-0.39/adapters/TruSeq3-PE.fa
+    avgqual: "20"
+
+scripts:
+    plot_bg_coverage: /media/labgenoma4/DATAPART4/jonasl/scripts/plot_bg_coverage.R

@@ -1,0 +1,232 @@
+### Snakefile for phylogeny pipeline, with associated file config.yaml
+### Load associated environment with $ conda activate phylogeny
+### Author Jonas Lescroart
+
+### Packages
+import pandas as pd
+import re
+from pathlib import Path
+
+### Configuration
+configfile: "config_mLynCan4.pri.v2.yaml"
+
+### Functions
+def strip_ext(file_str): 
+    bits = file_str.split(".") 
+    if re.match("gz", bits[-1]): 
+        bits = bits[:-1] 
+    if re.match("fasta|fa|fna", bits[-1]): 
+        bits = bits[:-1] 
+    return ".".join(bits) 
+
+### Variables
+metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python").set_index("unique_id", drop = False)
+unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
+
+unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
+
+# Working with a pruned sample set that contains only one sample per taxon
+#excluded_id = ["LPA-6", "LP339", "LCO-3", "LTI-32454", "LTI-6", "LTI-13", "bLge-252"]
+#unique_id = [id for id in unique_id if id not in excluded_id]
+
+genomic_fragments = pd.read_csv(config["input"]["filenames"], names = ["file"], engine = "python")
+unique_gf = [strip_ext(gf) for gf in genomic_fragments["file"].astype(str).tolist()]
+
+### Rules
+rule all:
+    input:
+        #expand("{dir}/raxml/RAxML_bestTree.{{gf}}".format(dir = config["output"]), gf = unique_gf),
+        #expand("{dir}/muscle/{{gf}}.tmp.nwk".format(dir = config["output"]), gf = unique_gf),
+        "{dir}/unique_raxml_topologies_count.nwk".format(dir = config["output"]),
+        "{dir}/unique_NJ_topologies_count.nwk".format(dir = config["output"]),
+        "{dir}/majority_consensus_raxml.tre".format(dir = config["output"]),
+        "{dir}/majority_consensus_NJ.tre".format(dir = config["output"]),
+        "{dir}/mcct_raxml.tre".format(dir = config["output"]),
+        "{dir}/mcct_NJ.tre".format(dir = config["output"]),
+        "{dir}/astral_raxml.nwk".format(dir = config["output"]),
+        "{dir}/astral_NJ.nwk".format(dir = config["output"])
+
+rule raxml:
+    input:
+        maf = "{dir}/{{gf}}.fasta".format(dir = config["input"]["fragments_dir"])
+    output:
+        bestTree = "{dir}/raxml/RAxML_bestTree.{{gf}}".format(dir = config["output"]),
+        info = "{dir}/raxml/RAxML_info.{{gf}}".format(dir = config["output"])
+    threads: 2
+    params:
+        outdir = "{dir}/raxml".format(dir = config["output"]),
+        outgroup = config["outgroup"],
+        tag = "{gf}"
+    shell:
+        "raxmlHPC-PTHREADS -T {threads} -s {input.maf} -w {params.outdir} -m GTRGAMMA -o {params.outgroup} -n {params.tag} -p 8 && " +
+        "rm {params.outdir}/RAxML_log.{params.tag} && " +
+        "rm {params.outdir}/RAxML_result.{params.tag} && " +
+        "rm {params.outdir}/RAxML_parsimonyTree.{params.tag}"
+
+#rule filenames:
+#    input:
+#        bestTree = expand("{dir}/raxml/RAxML_bestTree.{{gf}}".format(dir = config["output"]), gf = unique_gf)
+#    output:
+#        txt = "{dir}/filenames.txt".format(dir = config["output"])
+#    params:
+#        dir = "{dir}/raxml/".format(dir = config["output"])
+#    shell:
+#        "find {params.dir} -type f -name 'RAxML_bestTree.*' > {output.txt}"
+
+rule cat_raxml:
+    input:
+        bestTree = expand("{dir}/raxml/RAxML_bestTree.{{gf}}".format(dir = config["output"]), gf = unique_gf)
+    output:
+        nwk = temp("{dir}/all_raxml_unique_id.nwk".format(dir = config["output"]))
+    params:
+        dir = "{dir}/raxml".format(dir = config["output"])
+    shell:
+        "find {params.dir} -type f -name 'RAxML_bestTree.*' | xargs cat > {output.nwk}"
+        #"cat {params.dir}/RAxML_bestTree.* > {output.nwk}"
+
+rule unique_id2figure_id_raxml:
+    input:
+        nwk = "{dir}/all_raxml_unique_id.nwk".format(dir = config["output"])
+    output:
+        nwk = "{dir}/all_raxml.nwk".format(dir = config["output"])
+    run:
+        with open(output.nwk, "w") as out:
+            for line in shell("cat {input.nwk}", iterable = True):
+                for id in unique_id:
+                    line = re.sub(id, metadata["figure_id"][id], line)
+                out.write(line + "\n")
+
+rule nw_utils_raxml1:
+    input:
+        nwk = "{dir}/all_raxml.nwk".format(dir = config["output"])
+    output:
+        nwk = "{dir}/all_raxml_topologies.nwk".format(dir = config["output"])
+    shell:
+        "nw_topology {input.nwk} | nw_order - | sort > {output.nwk}"
+
+rule nw_utils_raxml2:
+    input:
+        nwk = "{dir}/all_raxml_topologies.nwk".format(dir = config["output"])
+    output:
+        nwk = "{dir}/unique_raxml_topologies_count.nwk".format(dir = config["output"])
+    shell:
+        "nw_topology {input.nwk} | uniq -c | sort -k1 -n > {output.nwk}"
+
+rule sumtrees_raxml: # From DendroPy package
+    input:
+        nwk = "{dir}/all_raxml.nwk".format(dir = config["output"])
+    output:
+        tre = "{dir}/majority_consensus_raxml.tre".format(dir = config["output"])
+    params:
+        outgroup = "Puma_concolor" # move to config file and add sumtrees functionality for multiple outgroups AND: use figure_id not unique_id
+    shell:
+        "sumtrees.py --rooted --root-target-at-outgroup {params.outgroup} --summary-target consensus --min-clade-freq 0.0 -o {output.tre} {input.nwk}"
+
+rule sumtrees_mcct_raxml:
+    input:
+        nwk = "{dir}/all_raxml.nwk".format(dir = config["output"])
+    output:
+        tre = "{dir}/mcct_raxml.tre".format(dir = config["output"])
+    params:
+        outgroup = "Puma_concolor" # move to config file and add sumtrees functionality for multiple outgroups AND: use figure_id not unique_id
+    shell:
+        "sumtrees.py --rooted --root-target-at-outgroup {params.outgroup} --summary-target mcct -o {output.tre} {input.nwk}"
+
+rule astral_raxml:
+    input:
+        nwk = "{dir}/all_raxml.nwk".format(dir = config["output"])
+    output:
+        nwk = "{dir}/astral_raxml.nwk".format(dir = config["output"])
+    params:
+        outgroup = "Puma_concolor",
+        astral = config["bin"]["astral"]
+    shell:
+        "java -jar {params.astral} --outgroup {params.outgroup}  -i {input.nwk} -o {output.nwk}"
+# When reporting tree, use -q option of astral to see it's score, and capture stderr with 2> some_file
+
+rule muscle:
+    input:
+        maf = "{dir}/{{gf}}.fasta".format(dir = config["input"]["fragments_dir"])
+    output:
+        nwk = temp("{dir}/muscle/{{gf}}.tmp.nwk".format(dir = config["output"]))
+    shell:
+        "muscle -maketree -in {input.maf} -out {output.nwk} -cluster neighborjoining"
+
+rule nw_utils_muscle1:
+    input:
+        nwk = "{dir}/muscle/{{gf}}.tmp.nwk".format(dir = config["output"])
+    output:
+        nwk = "{dir}/muscle/{{gf}}.nwk".format(dir = config["output"])
+    shell:
+        "nw_order {input.nwk} > {output.nwk}"
+
+rule cat_muscle:
+    input:
+        nwk = expand("{dir}/muscle/{{gf}}.nwk".format(dir = config["output"]), gf = unique_gf)
+    output:
+        nwk = temp("{dir}/all_NJ_unique_id.nwk".format(dir = config["output"]))
+    params:
+        dir = "{dir}/muscle".format(dir = config["output"])
+    shell:
+        "find {params.dir} -type f -name '*.nwk' | xargs cat > {output.nwk}"
+
+use rule unique_id2figure_id_raxml as unique_id2figure_id_muscle with:
+    input:
+        nwk = "{dir}/all_NJ_unique_id.nwk".format(dir = config["output"])
+    output:
+        nwk = "{dir}/all_NJ.nwk".format(dir = config["output"])
+
+rule nw_utils_muscle2:
+    input:
+        nwk = "{dir}/all_NJ.nwk".format(dir = config["output"])
+    output:
+        nwk = "{dir}/all_NJ_topologies.nwk".format(dir = config["output"])
+    shell:
+        "nw_topology {input.nwk} | nw_order - | sort > {output.nwk}"
+
+rule nw_utils_muscle3:
+    input:
+        nwk = "{dir}/all_NJ_topologies.nwk".format(dir = config["output"])
+    output:
+        nwk = "{dir}/unique_NJ_topologies_count.nwk".format(dir = config["output"])
+    shell:
+        "nw_topology {input.nwk} | uniq -c | sort -k1 -n > {output.nwk}"
+
+use rule sumtrees_raxml as sumtrees_muscle with:
+    input:
+        nwk = "{dir}/all_NJ.nwk".format(dir = config["output"])
+    output:
+        tre = "{dir}/majority_consensus_NJ.tre".format(dir = config["output"])
+
+use rule sumtrees_mcct_raxml as sumtrees_mcct_muscle with:
+    input:
+        nwk = "{dir}/all_NJ.nwk".format(dir = config["output"])
+    output:
+        tre = "{dir}/mcct_NJ.tre".format(dir = config["output"])
+
+use rule astral_raxml as astral_muscle with:
+    input:
+        nwk = "{dir}/all_NJ.nwk".format(dir = config["output"])
+    output:
+        nwk = "{dir}/astral_NJ.nwk".format(dir = config["output"])
+
+### pieces of code from other Snakefile that I might need here
+rule filenames:
+    input:
+        csv = expand("{dir}/pairwise_pi/fragments/{{gf}}.csv".format(dir = config["output"]), gf = unique_gf)
+    output:
+        txt = "{dir}/pairwise_pi/filenames.txt".format(dir = config["output"])
+    params:
+        dir = "{dir}/pairwise_pi/fragments/".format(dir = config["output"])
+    shell:
+        "find {params.dir} -type f > {output.txt}"
+
+rule pairwise_pi_plot:
+    input:
+        csv = expand("{dir}/pairwise_pi/fragments/{{gf}}.csv".format(dir = config["output"]), gf = unique_gf),
+        txt = "{dir}/pairwise_pi/filenames.txt".format(dir = config["output"])
+    output:
+        csv = "{dir}/pairwise_pi/average_pairwise_pi.csv".format(dir = config["output"])
+    shell:
+        "python3 {params.script} --list {input.txt} --output {output.csv}"
+

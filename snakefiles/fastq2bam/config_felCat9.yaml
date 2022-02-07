@@ -1,0 +1,22 @@
+# Config file of Snakefile fastq2bam
+# Load environment from within jonasl environment with $ conda activate fastq2bam
+
+metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2021APR10.tsv
+
+ref:
+    species: "Felis catus"
+    assembly: "felCat9"
+    chromosome_tag: "NC"
+    file: /media/labgenoma4/DATAPART7/duda_grupo/references/felCat9/GCF_000181335.3_Felis_catus_9.0_genomic.fna.gz
+
+output:
+    bam: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/bam_felCat9
+    
+# Uses Trimmomatic
+trim:
+    jar: /media/labgenoma4/DATAPART4/jonasl/bin/Trimmomatic-0.39/trimmomatic-0.39.jar
+    libr: /media/labgenoma4/DATAPART4/jonasl/bin/Trimmomatic-0.39/adapters/TruSeq3-PE.fa
+    avgqual: "20"
+
+scripts:
+    plot_bg_coverage: /media/labgenoma4/DATAPART4/jonasl/scripts/plot_bg_coverage.R

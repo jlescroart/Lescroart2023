@@ -1,0 +1,26 @@
+# Config file of Snakefile bam2fasta
+# Load environment from within jonasl environment with $ conda activate bam2fasta
+
+metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2021APR10.tsv
+
+ref:
+    species: "Leopardus geoffroyi"
+    assembly: "Lge-1"
+    chromosome_tag: "chr"
+    file: /media/labgenoma4/DATAPART7/duda_grupo/references/Lge_Assembly_v1/Lge-1_final.fna.gz
+    repeatmasker_out: /media/labgenoma4/DATAPART7/duda_grupo/references/Lge_Assembly_v1/Lge-1_final_rm.out.gz
+
+input:
+    bam: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/bam_Lge-1 
+
+output:
+    fasta: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1_pruned
+
+scripts:
+    createWindow_aln: /media/labgenoma4/DATAPART4/jonasl/scripts/createWindow_aln_JL.py
+    diagnose_fasta: /media/labgenoma4/DATAPART4/jonasl/scripts/diagnose_fasta.py
+    check_Ncontent: /media/labgenoma4/DATAPART4/jonasl/scripts/check_Ncontent.py
+
+windowsize: 100000 # in basepares
+cutoff: 40 # percentage of ACTG (or IUPAC) bases required to keep an alignment window with check_Ncontent.py (i.e. the reverse of the % of missing data that is allowed).
+doFasta: 1 # 1 for for random base, 4 for IUPAC ambiguity coding. If 4, change output fasta folder! E.g. by .../iupac/subfolder.

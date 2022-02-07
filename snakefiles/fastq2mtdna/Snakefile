@@ -1,0 +1,122 @@
+### Snakefile for fastq2mtdna pipeline, with associated file config.yaml
+### Mapping of raw reads (FASTQ) to reference mitogenome, output in fasta
+### Load associated environment with $ conda activate fastq2mtdna
+### Author Jonas Lescroart
+### snakemake -p --cores 4
+### The interleaved fastq as intermediate file is very large per sample (100-200 GB)
+### So limit the amount of parallelization through the provided cores
+
+### Packages
+import pandas as pd
+import re
+from Bio import SeqIO
+import os.path
+
+### Configuration
+configfile: "config_mLynCan4.pri.v2.yaml"
+
+### Functions
+def strip_ext(file_str): 
+    bits = file_str.split(".") 
+    if re.match("gz", bits[-1]): 
+        bits = bits[:-1] 
+    if re.match("fasta|fa|fna", bits[-1]): 
+        bits = bits[:-1] 
+    return ".".join(bits) 
+
+def get_fq(some_id, read = 12):
+    fq = "{dir}/{reads}".format(dir = metadata["path"].loc[some_id], reads = metadata["read_files"].loc[some_id])
+    fq1 = fq.format("1")
+    fq2 = fq.format("2")
+    if read == 1:
+        return [fq1]
+    elif read == 2:
+        return [fq2]
+    elif read == 12:
+        return [fq1, fq2] 
+
+### Variables
+metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python", encoding="latin-1").set_index("unique_id", drop = False)
+unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
+
+unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
+
+### Rules
+rule all:
+    input:
+        #expand("{dir}/{{id}}_mitobim/".format(dir = config["output"]["mtdna"]), id = unique_id)
+        expand("{dir}/{{id}}.fasta".format(dir = config["output"]["mtdna"]), id = unique_id)
+
+rule gunzip:
+    input:
+        gz = config["ref"]["file"]
+    output:
+        fna = temp(strip_ext(config["ref"]["file"]) + ".fna")
+    shell:
+        "gunzip -c {input.gz} > {output.fna}"
+
+rule mitogenome:
+    input:
+        fna = strip_ext(config["ref"]["file"]) + ".fna"
+    output:
+        fa = "{dir}/".format(dir = config["output"]["mtdna"]) + config["ref"]["assembly"] + "_mitogenome.fa" 
+    run:
+        record_dict = SeqIO.index(input.fna, "fasta")
+        mtdna = record_dict[config["ref"]["mitogenome"]]
+        with open(output.fa, 'w') as outfile:
+            SeqIO.write(mtdna, outfile, "fasta")
+
+rule interleave:
+    input:
+        fastq_gz = lambda wildcards: get_fq(wildcards.id, 12) 
+    output:
+        fastq = temp("{dir}/{{id}}_interleaved.fastq".format(dir = config["output"]["mtdna"]))
+    params:
+        script = config["scripts"]["interleave"]
+    shell:
+        "python2 {params.script} {input.fastq_gz} > {output.fastq}"
+
+rule mitobim:
+    input:
+        fastq = "{dir}/{{id}}_interleaved.fastq".format(dir = config["output"]["mtdna"]),
+        fa = "{dir}/".format(dir = config["output"]["mtdna"]) + config["ref"]["assembly"] + "_mitogenome.fa"
+    output:
+        fasta = "{dir}/{{id}}.fasta".format(dir = config["output"]["mtdna"])
+    params:
+        mira = config["software"]["mira"],
+        mitobim = config["software"]["mitobim"],
+        figure_id = lambda wildcards: metadata.loc[wildcards.id]["figure_id"],
+        ref = config["ref"]["assembly"],
+        sample_dir = lambda wildcards: config["output"]["mtdna"] + "/" + wildcards.id + "_mitobim"
+    run:
+        # Set up dir and prep environment
+        shell("mkdir -p {params.sample_dir}")
+        os.chdir(params.sample_dir)
+        shell("export LC_ALL=C") # To fix a bug in the MIRA assembler used by MITObim
+        # Run MITObim
+        shell("{params.mitobim} --mirapath {params.mira} -end 10 --trimreads -sample {params.figure_id} -ref {params.ref} -readpool {input.fastq} --quick {input.fa}")
+        # Copy fasta output from last iteration and clean up iteration files
+        last = sorted(os.listdir(params.sample_dir))[-1]
+        target = params.sample_dir + "/" + last + "/" + params.figure_id + "-" + params.ref + "-it" + last[-1] + "_noIUPAC.fasta"
+        mtdna = SeqIO.read(target, "fasta")
+        shell("mv {target} {output.fasta}")
+        shell("rm -r {params.sample_dir}")
+
+# Old code, didn't work because of an issue with MITObim?
+        # Start to loop through MITObim iterations
+#        for i in range(15):
+#            shell("{params.mitobim} --mirapath {params.mira} -start {i} -end {i} --trimreads -sample {params.figure_id} -ref {params.ref} -readpool {input.fastq} --quick {input.fa}")
+            # Delete previous iterations to free up disk space
+#            if i > 1:
+#                i_rm = i - 1
+#                path_rm = params.sample_dir + "/iteration" + str(i_rm)
+#                shell("rm -r {path_rm}")
+            # Stop loop when current iteration produces final fasta, clean up all iteration files
+            # Fasta considered final when it doesn't contain N gaps of length 5 or more
+#            target = params.sample_dir + "/iteration" + str(i) + "/" + params.figure_id + "-" + params.ref + "-it" + str(i) + "_noIUPAC.fasta"
+#            mtdna = SeqIO.read(target, "fasta")
+#            if not re.search("N"*5, mtdna.format("fasta")):
+#                shell("mv {target} {output.fasta}")
+#                shell("rm -r {params.sample_dir}")
+#                break
+

@@ -1,0 +1,198 @@
+### Snakefile for bam2vcf pipeline, with associated file config.yaml
+### Producement of vcf from BAM
+### Load associated environment with $ conda activate bam2vcf
+### Author Jonas Lescroart
+### snakemake -p --cores 17
+### bcftools can only use one core per process, so ideally use one core per sample
+
+### Packages
+import pandas as pd
+import re
+from pathlib import Path
+
+### Configuration
+configfile: "config_felCat9.yaml"
+
+### Functions
+def strip_ext(file_str): 
+    bits = file_str.split(".") 
+    if re.match("gz", bits[-1]): 
+        bits = bits[:-1] 
+    if re.match("fasta|fa|fna", bits[-1]): 
+        bits = bits[:-1] 
+    return ".".join(bits) 
+
+### Variables
+metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python", encoding="latin-1").set_index("unique_id", drop = False)
+unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
+
+ref_fai = pd.read_csv("{ref}.fna.fai".format(ref = strip_ext(config["ref"]["file"])), sep = "\t", engine = "python", names = ["chromosome", "2", "3", "4", "5"]).set_index("chromosome", drop = False)
+unique_chr = []
+for chr in ref_fai["chromosome"]:
+    if config["ref"]["chromosome_tag"] in chr:
+        unique_chr.append(chr)
+
+unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
+
+### Rules
+rule all:
+    input:
+        #"{dir}/bam_list.txt".format(dir = config["output"]["vcf"]),
+        #"{dir}/all.{ref}.bcf".format(dir = config["output"]["vcf"], ref = config["ref"]["assembly"]),
+        #"{dir}/total_depth.txt".format(dir = config["output"]["vcf"])
+        #expand("{dir}/{{id}}.vcf.gz".format(dir = config["output"]["vcf"]), id = unique_id)
+        "{dir}/leopardus_vcf.html".format(dir = config["output"]["vcf"]),
+        "{dir}/plink2/leopardus_pca.svg".format(dir = config["output"]["vcf"])
+
+rule ref_gunzip:
+    input:
+        ref_gz = config["ref"]["file"]
+    output:
+        ref_fna = "{ref}.fna".format(ref = strip_ext(config["ref"]["file"]))
+    shell:
+        "gunzip -k {input.ref_gz}"
+
+rule gatk:
+    input:
+        ref_fna = "{ref}.fna".format(ref = strip_ext(config["ref"]["file"]))
+    output:
+        dict = "{ref}.dict".format(ref = strip_ext(config["ref"]["file"]))
+    shell:
+        "gatk CreateSequenceDictionary -R {input.ref_fna} -O {output.dict}"
+
+rule bcftools_mpileup:
+    input:
+        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["input"]["bam"]),
+        ref_fna = "{ref}.fna".format(ref = strip_ext(config["ref"]["file"]))
+    output:
+        vcf = "{dir}/{{id}}.vcf.gz".format(dir = config["output"]["vcf"])
+    shell:
+        "bcftools mpileup -a FORMAT/AD,FORMAT/DP --skip-indels --max-depth 50 --min-MQ 30 --min-BQ 20 -Ou -f {input.ref_fna} {input.bam} | bcftools call -f GQ -m --variants-only -Ou | bcftools +fill-tags -Oz -o {output.vcf}"
+# maybe add -t option to filter out the random scaffolds
+# adjust max-depth to sample-specific value like in bam2fasta, and add minimum depth 5
+# can also used a masked ref, maybe better? masked sites won't be called
+# indels, depth and quality are now checked in mpileup step but would be better to keep mpileup simple and instead apply 'bcftools filter' at the end of this rule
+# that way the amound of failed variants can be checked in the variantqc html (PASS or FAIL)
+
+rule indexfeaturefile1:
+    input:
+        vcf = "{dir}/{{id}}.vcf.gz".format(dir = config["output"]["vcf"])
+    output:
+        tbi = "{dir}/{{id}}.vcf.gz.tbi".format(dir = config["output"]["vcf"])
+    shell:
+        "gatk IndexFeatureFile --input {input.vcf} --output {output.tbi}"
+
+# include stats
+#bcftools stats --fasta-ref /media/labgenoma4/DATAPART7/duda_grupo/references/Lge_Assembly_v1/Lge-1_final.fna /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/vcf_Lge-1/398-wiedii.vcf.gz > 398-wiedii.vcf.stats
+# can be jammed in multiqc
+
+rule unique_id2figure_id:
+    input:
+        bam = expand("{dir}/{{id}}.filtered.bam".format(dir = config["input"]["bam"]), id = unique_id)
+    output:
+        tsv = "{dir}/unique_id2figure_id.tsv".format(dir = config["output"]["vcf"]) # Make temp
+    run:
+        with open(output.tsv, "w") as out:
+            for id in unique_id:
+                new_id = metadata.loc[id]["figure_id"]
+                out.write(config["input"]["bam"] + "/"  + id + ".filtered.bam\t" + new_id + "\n")
+
+rule bcftools_merge:
+    input:
+        vcf = expand("{dir}/{{id}}.vcf.gz".format(dir = config["output"]["vcf"]), id = unique_id),
+        tbi = expand("{dir}/{{id}}.vcf.gz.tbi".format(dir = config["output"]["vcf"]), id = unique_id),
+        tsv = "{dir}/unique_id2figure_id.tsv".format(dir = config["output"]["vcf"])
+    output:
+        vcf = "{dir}/leopardus.vcf.gz".format(dir = config["output"]["vcf"])
+    shell:
+        "bcftools merge -Oz {input.vcf} | bcftools reheader -s {input.tsv} -o {output.vcf}"
+# bcftools reheader -s ~/sandbox/dsuite/new_id.txt leopardus.vcf.gz > leopardus_reheaded.vcf.gz
+
+use rule indexfeaturefile1 as indexfeaturefile2 with:
+    input:
+        vcf = "{dir}/leopardus.vcf.gz".format(dir = config["output"]["vcf"])
+    output:
+        tbi = "{dir}/leopardus.vcf.gz.tbi".format(dir = config["output"]["vcf"])
+
+rule variantqc:
+    input:
+        vcf = "{dir}/leopardus.vcf.gz".format(dir = config["output"]["vcf"]),
+        tbi = "{dir}/leopardus.vcf.gz.tbi".format(dir = config["output"]["vcf"]),
+        ref_fna = "{ref}.fna".format(ref = strip_ext(config["ref"]["file"])),
+        dict = "{ref}.dict".format(ref = strip_ext(config["ref"]["file"]))
+    output:
+        html = "{dir}/leopardus_vcf.html".format(dir = config["output"]["vcf"])
+    threads: 4
+    params:
+        jar = config["bin"]["variantqc"]
+    shell:
+        "java -jar {params.jar} VariantQC --threads {threads} -R {input.ref_fna} -V {input.vcf} -O {output.html}"
+
+rule keepfile:
+    input:
+        tbi = "{dir}/leopardus.vcf.gz.tbi".format(dir = config["output"]["vcf"])
+    output:
+        tsv = "{dir}/plink2/keep.tsv".format(dir = config["output"]["vcf"])
+    params:
+        path = "{dir}/plink2".format(dir = config["output"]["vcf"]),
+        outgroup = config["outgroup"]
+    run:
+        shell("mkdir -p {params.path}")
+        include_id = unique_id
+        include_id.remove(params.outgroup) # Implement something to remove multiple outgroups given in config
+        with open(output.tsv, "w") as out:
+            out.write("#FID\tIID\n")
+            for id in include_id:
+                out.write(metadata.loc[id]["figure_id"] + "\t" + metadata.loc[id]["figure_id"] + "\n")
+
+rule plink2_indep:
+    input:
+        vcf = "{dir}/leopardus.vcf.gz".format(dir = config["output"]["vcf"]),
+        tsv = "{dir}/plink2/keep.tsv".format(dir = config["output"]["vcf"])
+    output:
+        prune_in = temp("{dir}/plink2/leopardus.prune.in".format(dir = config["output"]["vcf"])),
+        prune_out = temp("{dir}/plink2/leopardus.prune.out".format(dir = config["output"]["vcf"])),
+        log = "{dir}/plink2/leopardus.log".format(dir = config["output"]["vcf"])
+    threads: 4
+    params:
+        prefix = "{dir}/plink2/leopardus".format(dir = config["output"]["vcf"])
+    shell:
+        "plink2 --vcf {input.vcf} --threads {threads} --memory 16000 --double-id --allow-extra-chr --set-missing-var-ids @:# --keep {input.tsv} --maf 0.05 --indep-pairwise 50 10 0.1 --out {params.prefix}"
+
+rule plink2_afreq:
+    input:
+        vcf = "{dir}/leopardus.vcf.gz".format(dir = config["output"]["vcf"]),
+        tsv = "{dir}/plink2/keep.tsv".format(dir = config["output"]["vcf"])
+    output:
+        afreq = temp("{dir}/plink2/leopardus.afreq".format(dir = config["output"]["vcf"]))
+    threads: 4
+    params:
+        prefix = "{dir}/plink2/leopardus".format(dir = config["output"]["vcf"])
+    shell:
+        "plink2 --vcf {input.vcf} --threads {threads} --memory 16000 --double-id --allow-extra-chr --set-missing-var-ids @:# --keep {input.tsv} --freq --out {params.prefix}"
+
+rule plink2_pca:
+    input:
+        vcf = "{dir}/leopardus.vcf.gz".format(dir = config["output"]["vcf"]),
+        prune_in = "{dir}/plink2/leopardus.prune.in".format(dir = config["output"]["vcf"]),
+        afreq = "{dir}/plink2/leopardus.afreq".format(dir = config["output"]["vcf"]),
+        tsv = "{dir}/plink2/keep.tsv".format(dir = config["output"]["vcf"])
+    output:
+        eigenvec = "{dir}/plink2/leopardus.eigenvec".format(dir = config["output"]["vcf"]),
+        eigenval = "{dir}/plink2/leopardus.eigenval".format(dir = config["output"]["vcf"])
+    threads: 4
+    params:
+        prefix = "{dir}/plink2/leopardus".format(dir = config["output"]["vcf"])
+    shell:
+        "plink2 --vcf {input.vcf} --threads {threads} --memory 16000 --double-id --allow-extra-chr --set-missing-var-ids @:# --keep {input.tsv} --read-freq {input.afreq} --extract {input.prune_in} --pca --out {params.prefix}"
+
+rule plot_plink_pca:
+    input:
+        eigenvec = "{dir}/plink2/leopardus.eigenvec".format(dir = config["output"]["vcf"]),
+        eigenval = "{dir}/plink2/leopardus.eigenval".format(dir = config["output"]["vcf"])
+    output:
+        svg = "{dir}/plink2/leopardus_pca.svg".format(dir = config["output"]["vcf"])
+    params:
+        script = config["scripts"]["plot_plink_pca"]
+    shell:
+        "python {params.script} --vec {input.eigenvec} --val {input.eigenval} --output {output.svg}"

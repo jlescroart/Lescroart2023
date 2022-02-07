@@ -1,0 +1,282 @@
+### Snakefile for fastq2bam pipeline, with associated file config.yaml
+### Mapping of raw reads (FASTQ) to reference genomes, output BAM
+### Load associated environment with $ conda activate fastq2bam
+### Author Jonas Lescroart
+### snakemake -p --cores 24 --resources mem_mb=150000
+
+### Packages
+import pandas as pd
+import re
+from pathlib import Path
+
+### Configuration
+configfile: "config_felCat9.yaml"
+
+### Functions
+def strip_ext(file_str): 
+    bits = file_str.split(".") 
+    if re.match("gz", bits[-1]): 
+        bits = bits[:-1] 
+    if re.match("fasta|fa|fna", bits[-1]): 
+        bits = bits[:-1] 
+    return ".".join(bits) 
+
+def get_fq(some_id, read = 12):
+    fq = "{dir}/{reads}".format(dir = metadata["path"].loc[some_id], reads = metadata["read_files"].loc[some_id])
+    fq1 = fq.format("1")
+    fq2 = fq.format("2")
+    if read == 1:
+        return [fq1]
+    elif read == 2:
+        return [fq2]
+    elif read == 12:
+        return [fq1, fq2] 
+
+### Variables
+metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python", encoding="latin-1").set_index("unique_id", drop = False)
+unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
+#print(unique_id)
+unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
+
+#unique_id = ["OGE-3"] # To test with 1 individual
+
+### Print testing
+#path_file = expand("{dir}/{reads}", zip, dir = [metadata["path"].loc[id] for id in unique_id], reads = [metadata["read_files"].loc[id] for id in unique_id])
+
+### Rules
+rule all:
+    input:
+        #expand("{dir}/fastqc_{id}", zip, dir = [metadata["path"].loc[id] for id in unique_id], id = unique_id),
+        "/".join(config["metadata"].split("/")[:-1]) + "/multiqc_report.html",
+        expand("{dir}/{{id}}.filtered.bam".format(dir = config["output"]["bam"]), id = unique_id),
+        "{dir}/bamqc/bamqc_leopardus_filtered.pdf".format(dir = config["output"]["bam"]),
+        "{dir}/dupl_metrics/multiqc/multiqc_dupl_metrics.html".format(dir = config["output"]["bam"]),
+        "{dir}/deeptools/deeptools_leopardus_filtered.pdf".format(dir = config["output"]["bam"]),
+        "{dir}/flagstat/multiqc/multiqc_flagstat.html".format(dir = config["output"]["bam"])
+
+rule fastqc:
+    input:
+        fastq = lambda wildcards: get_fq(wildcards.id, 12) 
+    output:
+        qc_dir = directory("{dir}/fastqc_{id}/")
+        #html = "",
+        #zip = ""
+    threads: 2
+    shell:
+        "mkdir -p {output.qc_dir} && " + 
+        "fastqc {input.fastq} --threads {threads} --outdir {output.qc_dir}"
+
+rule multiqc:
+    input:
+        html = expand("{dir}/fastqc_{id}/", zip, dir = [metadata["path"].loc[id] for id in unique_id], id = unique_id)
+    output:
+        html = "/".join(config["metadata"].split("/")[:-1]) + "/multiqc_report.html"
+    shell:
+        "multiqc {{input.html}} -f -o {out}".format(out = "/".join(config["metadata"].split("/")[:-1]))
+
+rule trim:
+    input:
+        fq1 = lambda wildcards: get_fq(wildcards.id, 1),
+        fq2 = lambda wildcards: get_fq(wildcards.id, 2)
+    output:
+        fq1_pe = temp("{dir}/trim/{{id}}_R1_trim_pe.fastq.gz".format(dir = config["output"]["bam"])),
+        fq1_se = temp("{dir}/trim/{{id}}_R1_trim_se.fastq.gz".format(dir = config["output"]["bam"])),
+        fq2_pe = temp("{dir}/trim/{{id}}_R2_trim_pe.fastq.gz".format(dir = config["output"]["bam"])),
+        fq2_se = temp("{dir}/trim/{{id}}_R2_trim_se.fastq.gz".format(dir = config["output"]["bam"]))
+    threads: 8
+    resources:
+        mem_mb = 50000
+    params:
+        jar = config["trim"]["jar"], 
+        libr = config["trim"]["libr"],
+        summary = config["output"]["bam"] + "/trim/" + "{id}_trim_summary.txt",
+        avgqual = config["trim"]["avgqual"],
+        minlen = lambda wildcards: metadata["read_length"].loc[wildcards.id]
+    shell:
+        "java -jar {params.jar} PE -threads {threads} -summary {params.summary} " +
+        "{input.fq1} {input.fq2} {output.fq1_pe} {output.fq1_se} {output.fq2_pe} {output.fq2_se} " +
+        "ILLUMINACLIP:{params.libr}:2:30:10:2:keepBothReads AVGQUAL:{params.avgqual} MINLEN:{params.minlen}"
+
+rule ref_index:
+    input:
+        ref = config["ref"]["file"]
+    output:
+        mmi = strip_ext(config["ref"]["file"]) + ".mmi"
+    threads: 3
+    shell:
+        "minimap2 -x sr -t {threads} -d {output.mmi} {input.ref}"
+
+rule minimap2:
+    input:
+        ref = strip_ext(config["ref"]["file"]) + ".mmi",
+        fq1 = "{dir}/trim/{{id}}_R1_trim_pe.fastq.gz".format(dir = config["output"]["bam"]),
+        fq2 = "{dir}/trim/{{id}}_R2_trim_pe.fastq.gz".format(dir = config["output"]["bam"])
+    output:
+        bam = temp("{dir}/{{id}}_trim.bam".format(dir = config["output"]["bam"]))
+    threads: 8
+    params:
+        threads_sam = 3 # Set no higher than threads, and max 3
+    shell:
+        "minimap2 -x sr --seed 8 -t {threads} -2 -a {input.ref} {input.fq1} {input.fq2} | " +
+        "samtools view -1 -@ {params.threads_sam} -h -b > {output.bam}"
+
+rule samtools1:
+    input:
+        bam = "{dir}/{{id}}_trim.bam".format(dir = config["output"]["bam"]),
+        ref = strip_ext(config["ref"]["file"]) + ".fna"
+    output:
+        bam = temp("{dir}/{{id}}.samtools1.bam".format(dir = config["output"]["bam"]))
+    threads: 4
+    params:
+        threads_sam = 3 # I think samtools counts '-@ 3' as 1+3 threads so the rule needs 4 
+    shell:
+        "samtools fixmate -m -O BAM -@ {params.threads_sam} {input.bam} - | " +
+        "samtools sort -@ {params.threads_sam} - -o - | " +
+        "samtools calmd -b -@ {params.threads_sam} - {input.ref} > {output.bam}"
+
+rule gatk1:
+    input:
+        bam = "{dir}/{{id}}.samtools1.bam".format(dir = config["output"]["bam"])
+    output:
+        bam = temp("{dir}/{{id}}.gatk1.bam".format(dir = config["output"]["bam"])),
+        metrics = "{dir}/dupl_metrics/{{id}}.dupl_metrics.txt".format(dir = config["output"]["bam"])
+    shell:
+        "mkdir -p {dir}/dupl_metrics/ && ".format(dir = config["output"]["bam"]) +
+        "gatk --java-options '-Xmx16G' MarkDuplicates --REMOVE_DUPLICATES true --INPUT {input.bam} --METRICS_FILE {output.metrics} --OUTPUT {output.bam}"
+
+rule multiqc_dupl:
+    input:
+        metrics = expand("{dir}/dupl_metrics/{{id}}.dupl_metrics.txt".format(dir = config["output"]["bam"]), id = unique_id)
+    output:
+        html = "{dir}/dupl_metrics/multiqc/multiqc_dupl_metrics.html".format(dir = config["output"]["bam"])
+    shell:
+        "multiqc --force --filename multiqc_dupl_metrics.html --outdir {dir}/dupl_metrics/multiqc/ {dir}/dupl_metrics/".format(dir = config["output"]["bam"])
+
+rule gatk2:
+    input:
+        bam = "{dir}/{{id}}.gatk1.bam".format(dir = config["output"]["bam"])
+    output:
+        bam = temp("{dir}/{{id}}.gatk2.bam".format(dir = config["output"]["bam"])),
+    shell:
+        "gatk --java-options '-Xmx16G' CleanSam --INPUT {input.bam} --OUTPUT {output.bam}"
+
+rule samtools2:
+    input:
+        bam = "{dir}/{{id}}.gatk2.bam".format(dir = config["output"]["bam"])
+    output:
+        bam = temp("{dir}/{{id}}.samtools2.bam".format(dir = config["output"]["bam"])),
+        bai = temp("{dir}/{{id}}.samtools2.bam.bai".format(dir = config["output"]["bam"]))
+    threads: 4
+    params:
+        threads_sam = 3 # cf. rule samtools1
+    shell:
+        "samtools view -1 -@ {params.threads_sam} -h -b -q 10 {input.bam} > {output.bam} && " + 
+        "samtools index -@ {params.threads_sam} {output.bam} {output.bai}"
+
+# Rule samtools3 removes non-chromosome contigs. The grep -v statement was added specifically for the Lge-1 reference.
+rule samtools3:
+    input:
+        bam = "{dir}/{{id}}.samtools2.bam".format(dir = config["output"]["bam"]),
+        bai = "{dir}/{{id}}.samtools2.bam.bai".format(dir = config["output"]["bam"])
+    output:
+        bam = temp("{dir}/{{id}}.samtools3.bam".format(dir = config["output"]["bam"])),
+        bai = temp("{dir}/{{id}}.samtools3.bam.bai".format(dir = config["output"]["bam"]))
+    threads: 4
+    params:
+        tag = config["ref"]["chromosome_tag"],
+        threads_sam = 3 # cf. rule samtools1
+    shell:
+        "samtools view -1 -@ {params.threads_sam} -h -b {input.bam} $(samtools idxstats {input.bam} | cut -f 1 | grep '{params.tag}' | grep -v 'Un_scaffold' | awk 1 ORS=' ') > {output.bam} && " +
+        "samtools index -@ {params.threads_sam} {output.bam} {output.bai}"
+
+rule crumble:
+    input:
+        bam = "{dir}/{{id}}.samtools3.bam".format(dir = config["output"]["bam"]),
+        bai = "{dir}/{{id}}.samtools3.bam.bai".format(dir = config["output"]["bam"])
+    output:
+        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["output"]["bam"]),
+        bai = "{dir}/{{id}}.filtered.bam.bai".format(dir = config["output"]["bam"])
+    threads: 4
+    params:
+        threads_sam = 3 # cf. rule samtools1
+    shell:
+        "crumble -O bam,nthreads={threads} {input.bam} {output.bam} && " +
+        "samtools index -@ {params.threads_sam} {output.bam} {output.bai}"
+
+rule flagstat:
+    input:
+        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["output"]["bam"])
+    output:
+        flagstat = "{dir}/flagstat/{{id}}.filtered.flagstat.txt".format(dir = config["output"]["bam"])
+    threads: 4
+    params:
+        threads_sam = 3 # cf. rule samtools1
+    shell:
+        "mkdir -p {dir}/flagstat/ && ".format(dir = config["output"]["bam"]) +
+        "samtools flagstat -@ {params.threads_sam} {input.bam} > {output.flagstat}" # dropped -O tsv
+
+rule multiqc_flagstat:
+    input:
+        tsv = expand("{dir}/flagstat/{{id}}.filtered.flagstat.txt".format(dir = config["output"]["bam"]), id = unique_id)
+    output:
+        html = "{dir}/flagstat/multiqc/multiqc_flagstat.html".format(dir = config["output"]["bam"])
+    shell:
+        "multiqc --force --filename multiqc_flagstat.html --outdir {dir}/flagstat/multiqc/ {dir}/flagstat/".format(dir = config["output"]["bam"])
+
+rule bamqc:
+    input:
+        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["output"]["bam"])
+    output:
+        html = "{dir}/bamqc/{{id}}.filtered_bamqc.html".format(dir = config["output"]["bam"]),
+        zip = "{dir}/bamqc/{{id}}.filtered_bamqc.zip".format(dir = config["output"]["bam"])
+    params:
+        dir = "{dir}/bamqc/".format(dir = config["output"]["bam"])
+    shell:
+        "mkdir -p {params.dir} && " +
+        "bamqc {input.bam} -o {params.dir}"
+
+rule weasyprint:
+    input:
+        html = "{dir}/bamqc/{{id}}.filtered_bamqc.html".format(dir = config["output"]["bam"])
+    output:
+        pdf = temp("{dir}/bamqc/{{id}}.filtered_bamqc.pdf".format(dir = config["output"]["bam"]))
+    shell:
+        "weasyprint {input.html} {output.pdf}"
+
+rule pdfunite_bamqc:
+    input:
+        pdfs = expand("{dir}/bamqc/{{id}}.filtered_bamqc.pdf".format(dir = config["output"]["bam"]), id = unique_id)
+    output:
+        pdf = "{dir}/bamqc/bamqc_leopardus_filtered.pdf".format(dir = config["output"]["bam"])
+    shell:
+        "pdfunite {input.pdfs} {output.pdf}"
+
+rule deeptools:
+     input:
+         bam = "{dir}/{{id}}.filtered.bam".format(dir = config["output"]["bam"])
+     output:
+         bedgraph = "{dir}/deeptools/{{id}}.filtered.bg".format(dir = config["output"]["bam"])
+     threads: 8
+     shell:
+         "bamCoverage --bam {input.bam} --binSize 100000 --numberOfProcessors {threads} --outFileFormat bedgraph --outFileName {output.bedgraph}"
+
+rule plot_bg_coverage:
+     input:
+         bedgraph = "{dir}/deeptools/{{id}}.filtered.bg".format(dir = config["output"]["bam"])
+     output:
+         pdf = "{dir}/deeptools/{{id}}.filtered_deeptools.pdf".format(dir = config["output"]["bam"])
+     params:
+         script = config["scripts"]["plot_bg_coverage"],
+         tag = config["ref"]["chromosome_tag"],
+         readlength = lambda wildcards: metadata["read_length"].loc[wildcards.id]
+     shell:
+         "Rscript {params.script} {input.bedgraph} {params.tag} {params.readlength} {output.pdf}"
+
+rule pdfunite_deeptools:
+    input:
+        pdfs = expand("{dir}/deeptools/{{id}}.filtered_deeptools.pdf".format(dir = config["output"]["bam"]), id = unique_id)
+    output:
+        pdf = "{dir}/deeptools/deeptools_leopardus_filtered.pdf".format(dir = config["output"]["bam"])
+    shell:
+        "pdfunite {input.pdfs} {output.pdf}"
+

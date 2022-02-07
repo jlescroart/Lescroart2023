@@ -1,0 +1,301 @@
+### Snakefile for bam2fasta pipeline, with associated file config.yaml
+### Producement of genomic consensus fasta from BAM, masking, and partition in aligned windows
+### Load associated environment with $ conda activate bam2fasta
+### Author Jonas Lescroart
+
+### Packages
+import pandas as pd
+import re
+from pathlib import Path
+
+### Configuration
+configfile: "config_Lge-1.yaml"
+
+### Functions
+def strip_ext(file_str): 
+    bits = file_str.split(".") 
+    if re.match("gz", bits[-1]): 
+        bits = bits[:-1] 
+    if re.match("fasta|fa|fna", bits[-1]): 
+        bits = bits[:-1] 
+    return ".".join(bits) 
+
+### Variables
+metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python").set_index("unique_id", drop = False)
+unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
+
+windowsize = config["windowsize"]
+windowsizekb = str(round(int(windowsize)/1000))
+
+ref_fai = pd.read_csv("{ref}.fna.fai".format(ref = strip_ext(config["ref"]["file"])), sep = "\t", engine = "python", names = ["chromosome", "2", "3", "4", "5"]).set_index("chromosome", drop = False)
+unique_chr = []
+for chr in ref_fai["chromosome"]:
+    if config["ref"]["chromosome_tag"] in chr:
+        unique_chr.append(chr)
+
+unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
+
+# Working with a pruned sample set that contains only one sample per taxon
+excluded_id = ["LPA-6", "LP339", "LCO-3", "LTI-32454", "LTI-6", "LTI-13", "bLge-252"]
+unique_id = [id for id in unique_id if id not in excluded_id]
+
+### Rules
+rule all:
+    input:
+        expand("{dir}/unmasked/diagnose_fasta/{{id}}.info".format(dir = config["output"]["fasta"]), id = unique_id),
+        expand("{dir}/repeatmasked/diagnose_fasta/{{id}}.info".format(dir = config["output"]["fasta"]), id = unique_id),
+        "{dir}/unmasked/{size}kb{cutoff}/summary_{cutoff}.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"]),
+        "{dir}/repeatmasked/{size}kb{cutoff}/summary_{cutoff}.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"])
+
+rule idxstats:
+    input:
+        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["input"]["bam"]),
+        bai = "{dir}/{{id}}.filtered.bam.bai".format(dir = config["input"]["bam"]),
+    output:
+        tsv = temp("{dir}/{{id}}.idxstats.tsv".format(dir = config["input"]["bam"]))
+    shell:
+        "samtools idxstats {input.bam} > {output.tsv}"
+
+rule angsd:
+    input:
+        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["input"]["bam"]),
+        tsv = "{dir}/{{id}}.idxstats.tsv".format(dir = config["input"]["bam"])
+    output:
+        fagz = temp("{dir}/unmasked/{{id}}@{{chr}}.fa.gz".format(dir = config["output"]["fasta"])), # Using @ here as wildcard spacer because it's an unlikely sign to appear in a sample or chromosome name and so the spacer won't interfere with the wildcard contents
+        arg = temp("{dir}/unmasked/{{id}}@{{chr}}.arg".format(dir = config["output"]["fasta"]))
+    threads: 4
+    params:
+        doFasta = config["doFasta"],
+        out = "{dir}/unmasked/{{id}}@{{chr}}".format(dir = config["output"]["fasta"]),
+        readlength = lambda wildcards: metadata["read_length"].loc[wildcards.id],
+        chromosome = "{chr}"
+    run:
+        idx = pd.read_csv(input.tsv, sep = "\t", engine = "python", names = ["chr", "chr_length", "reads", "unmapped"]).set_index("chr", drop = False)
+        read_length = params.readlength
+        coverage = (read_length * idx["reads"][params.chromosome]) / idx["chr_length"][params.chromosome]
+        MinDepth = round(coverage * 0.5) if round(coverage * 0.5) > 5 else 5 # Absolute lower bound of 5 for per site depth
+        MaxDepth = round(coverage * 1.5)
+        shell("angsd -dofasta {params.doFasta} -seed 8 -nThreads {threads} -doCounts 1 -explode 0 -r {params.chromosome}: -setMinDepth {MinDepth} -setMaxDepth {MaxDepth} -minQ 20 -minMapQ 30 -i {input.bam} -out {params.out}")
+
+rule zcat:
+    input:
+        fagz = ["{dir}/unmasked/{{id}}@".format(dir = config["output"]["fasta"]) + chr + ".fa.gz" for chr in unique_chr],
+        arg = ["{dir}/unmasked/{{id}}@".format(dir = config["output"]["fasta"]) + chr + ".arg" for chr in unique_chr]
+    output:
+        fa = "{dir}/unmasked/{{id}}.fa".format(dir = config["output"]["fasta"]),
+        arg = "{dir}/unmasked/angsd_arg/{{id}}.arg".format(dir = config["output"]["fasta"])
+    shell:
+        "zcat {input.fagz} > {output.fa} && " +
+        "cat {input.arg} > {output.arg}"
+
+rule index_unmasked:
+    input:
+        fa = "{dir}/unmasked/{{id}}.fa".format(dir = config["output"]["fasta"])
+    output:
+        fai = "{dir}/unmasked/{{id}}.fa.fai".format(dir = config["output"]["fasta"])
+    shell:
+        "samtools faidx {input.fa} > {output.fai}"
+
+rule diagnose_fasta_unmasked:
+    input:
+        fa = "{dir}/unmasked/{{id}}.fa".format(dir = config["output"]["fasta"])
+    output:
+        info = "{dir}/unmasked/diagnose_fasta/{{id}}.info".format(dir = config["output"]["fasta"])
+    params:
+        dir = "{dir}/unmasked/diagnose_fasta/".format(dir = config["output"]["fasta"]),
+        info = "{dir}/unmasked/{{id}}.info".format(dir = config["output"]["fasta"]),
+        script = config["scripts"]["diagnose_fasta"]
+    shell:
+        "mkdir -p {params.dir} && " +
+        "python {params.script} {input.fa} && " +
+        "mv {params.info} {output.info}"
+
+rule windowed_index:
+    input:
+        fai = "{dir}/unmasked/{{id}}.fa.fai".format(dir = config["output"]["fasta"])
+    output:
+        bed = temp("{dir}/unmasked/{size}kb/{{id}}.bed".format(dir = config["output"]["fasta"], size = windowsizekb))
+    params:
+        size = windowsize 
+    shell:
+        "bedtools makewindows -g {input.fai} -w {params.size} > {output.bed}"
+
+rule windowed_fasta:
+    input:
+        fa = "{dir}/unmasked/{{id}}.fa".format(dir = config["output"]["fasta"]),
+        bed = "{dir}/unmasked/{size}kb/{{id}}.bed".format(dir = config["output"]["fasta"], size = windowsizekb)
+    output:
+        fas = temp("{dir}/unmasked/{size}kb/{{id}}.fas".format(dir = config["output"]["fasta"], size = windowsizekb))
+    shell:
+        "bedtools getfasta -fi {input.fa} -bed {input.bed} -fo {output.fas}"
+
+rule createWindow_aln:
+    input:
+        fa = expand("{dir}/unmasked/{size}kb/{{id}}.fas".format(dir = config["output"]["fasta"], size = windowsizekb), id = unique_id)
+    output:
+        dir = directory("{dir}/unmasked/{size}kb/windows/".format(dir = config["output"]["fasta"], size = windowsizekb)),
+        txt = "{dir}/unmasked/{size}kb/filenames.txt".format(dir = config["output"]["fasta"], size = windowsizekb)
+    params:
+        cwd = "{dir}/unmasked/{size}kb/".format(dir = config["output"]["fasta"], size = windowsizekb),
+        script = config["scripts"]["createWindow_aln"]
+    shell:
+        "cd {params.cwd} && " + 
+        "python {params.script} {input.fa}"
+
+rule check_Ncontent:
+    input:
+        dir = directory("{dir}/unmasked/{size}kb/windows/".format(dir = config["output"]["fasta"], size = windowsizekb)),
+        txt = "{dir}/unmasked/{size}kb/filenames.txt".format(dir = config["output"]["fasta"], size = windowsizekb)
+    output:
+        dir = directory("{dir}/unmasked/{size}kb{cutoff}/windows/".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"])), 
+        summary = "{dir}/unmasked/{size}kb{cutoff}/summary_{cutoff}.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"]),
+        txt = "{dir}/unmasked/{size}kb{cutoff}/filenames.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"])
+    params:
+        script = config["scripts"]["check_Ncontent"],
+        cutoff = config["cutoff"]
+    shell:
+        "python {params.script} {input.dir} {params.cutoff} && " + 
+        "cp {input.txt} {output.txt}"
+
+# Below this line are the rules for repeatmasked fastas. Most rules are duplicated, see comment further down.
+rule gunzip:
+    input:
+        gz = config["ref"]["repeatmasker_out"]
+    output:
+        rmsk = temp(strip_ext(config["ref"]["repeatmasker_out"]))
+    shell:
+        "gunzip -c {input.gz} > {output.rmsk}"
+
+rule rmsk2bed:
+    input:
+        rmsk = strip_ext(config["ref"]["repeatmasker_out"])
+    output:
+        bed = strip_ext(config["ref"]["repeatmasker_out"]) + ".bed"
+    shell:
+        "rmsk2bed < {input.rmsk} | bedops --merge - > {output.bed}"
+
+rule maskfasta:
+    input:
+        fa = "{dir}/unmasked/{{id}}.fa".format(dir = config["output"]["fasta"]),
+        bed = strip_ext(config["ref"]["repeatmasker_out"]) + ".bed"
+    output:
+        fa = "{dir}/repeatmasked/{{id}}.fa".format(dir = config["output"]["fasta"])
+    shell:
+        "bedtools maskfasta -fullHeader -fi {input.fa} -fo {output.fa} -bed {input.bed}"
+
+# Below this line are duplicated rules from the 'unmasked' section, with file paths adapted for the 'repeatmasked' section. Maybe I'll come up with a more elegant solution later on, because duplicating rules is faux pas.
+rule index_repeatmasked:
+    input:
+        fa = "{dir}/repeatmasked/{{id}}.fa".format(dir = config["output"]["fasta"])
+    output:
+        fai = "{dir}/repeatmasked/{{id}}.fa.fai".format(dir = config["output"]["fasta"])
+    shell:
+        "samtools faidx {input.fa} > {output.fai}"
+
+rule diagnose_fasta_repeatmasked:
+    input:
+        fa = "{dir}/repeatmasked/{{id}}.fa".format(dir = config["output"]["fasta"])
+    output:
+        info = "{dir}/repeatmasked/diagnose_fasta/{{id}}.info".format(dir = config["output"]["fasta"])
+    params:
+        dir = "{dir}/repeatmasked/diagnose_fasta/".format(dir = config["output"]["fasta"]),
+        info = "{dir}/repeatmasked/{{id}}.info".format(dir = config["output"]["fasta"]),
+        script = config["scripts"]["diagnose_fasta"]
+    shell:
+        "mkdir -p {params.dir} && " +
+        "python {params.script} {input.fa} && " +
+        "mv {params.info} {output.info}"
+
+rule windowed_index_repeatmasked:
+    input:
+        fai = "{dir}/repeatmasked/{{id}}.fa.fai".format(dir = config["output"]["fasta"])
+    output:
+        bed = temp("{dir}/repeatmasked/{size}kb/{{id}}.bed".format(dir = config["output"]["fasta"], size = windowsizekb))
+    params:
+        size = windowsize 
+    shell:
+        "bedtools makewindows -g {input.fai} -w {params.size} > {output.bed}"
+
+rule windowed_fasta_repeatmasked:
+    input:
+        fa = "{dir}/repeatmasked/{{id}}.fa".format(dir = config["output"]["fasta"]),
+        bed = "{dir}/repeatmasked/{size}kb/{{id}}.bed".format(dir = config["output"]["fasta"], size = windowsizekb)
+    output:
+        fas = temp("{dir}/repeatmasked/{size}kb/{{id}}.fas".format(dir = config["output"]["fasta"], size = windowsizekb))
+    shell:
+        "bedtools getfasta -fi {input.fa} -bed {input.bed} -fo {output.fas}"
+
+rule createWindow_aln_repeatmasked:
+    input:
+        fa = expand("{dir}/repeatmasked/{size}kb/{{id}}.fas".format(dir = config["output"]["fasta"], size = windowsizekb), id = unique_id)
+    output:
+        dir = directory("{dir}/repeatmasked/{size}kb/windows/".format(dir = config["output"]["fasta"], size = windowsizekb)),
+        txt = "{dir}/repeatmasked/{size}kb/filenames.txt".format(dir = config["output"]["fasta"], size = windowsizekb)
+    params:
+        cwd = "{dir}/repeatmasked/{size}kb/".format(dir = config["output"]["fasta"], size = windowsizekb),
+        script = config["scripts"]["createWindow_aln"]
+    shell:
+        "cd {params.cwd} && " + 
+        "python {params.script} {input.fa}"
+
+rule check_Ncontent_repeatmasked:
+    input:
+        dir = directory("{dir}/repeatmasked/{size}kb/windows/".format(dir = config["output"]["fasta"], size = windowsizekb)),
+        txt = "{dir}/repeatmasked/{size}kb/filenames.txt".format(dir = config["output"]["fasta"], size = windowsizekb)
+    output:
+        dir = directory("{dir}/repeatmasked/{size}kb{cutoff}/windows/".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"])), 
+        summary = "{dir}/repeatmasked/{size}kb{cutoff}/summary_{cutoff}.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"]),
+        txt = "{dir}/repeatmasked/{size}kb{cutoff}/filenames.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"])
+    params:
+        script = config["scripts"]["check_Ncontent"],
+        cutoff = config["cutoff"]
+    shell:
+        "python {params.script} {input.dir} {params.cutoff} && " + 
+        "cp {input.txt} {output.txt}"
+
+### Below this are discontinued rules for consensus calling with consensify, which requires some preparing with ANGSD. It's slower, more hassle and more memory-intensive than pure ANGSD, but could be better for aDNA because it's better on error-prone data (although recent ANGSD also has some implementations I think).
+#rule angsd:
+#    input:
+#        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["output"]["bam"])
+#    output:
+#        pos = temp("{dir}/{{id}}.filtered.bam.pos.gz".format(dir = config["output"]["bam"])),
+#        counts = temp("{dir}/{{id}}.filtered.bam.counts.gz".format(dir = config["output"]["bam"]))
+#    threads: 8
+#    shell:
+#        "angsd -doCounts 1 -dumpCounts 3 -minQ 20 -minMapQ 30 -doDepth -nThreads {threads} -i {input.bam} -out {input.bam}"
+#
+#rule unzip:
+#    input:
+#       pos = "{dir}/{{id}}.filtered.bam.pos.gz".format(dir = config["output"]["bam"]),
+#       counts = "{dir}/{{id}}.filtered.bam.counts.gz".format(dir = config["output"]["bam"])
+#    output:
+#       pos = temp("{dir}/{{id}}.filtered.bam.pos".format(dir = config["output"]["bam"])),
+#       counts = temp("{dir}/{{id}}.filtered.bam.counts".format(dir = config["output"]["bam"]))
+#    threads: 8
+#    shell:
+#       "gunzip {input.pos} && gunzip {input.counts}"
+#
+#rule lengths:
+#    input:
+#        ref = strip_ext(config["ref"]["file"]) + ".fna"
+#    output:
+#        lengths = strip_ext(config["ref"]["file"]) + ".fna.fai.lengths"
+#    shell:
+#        "samtools faidx {input.ref} | awk '{{print $1,$2}}' - > {output.lengths}"
+#
+#rule consensify:
+#    input:
+#        pos = "{dir}/{{id}}.filtered.bam.pos".format(dir = config["output"]["bam"]),
+#        counts = "{dir}/{{id}}.filtered.bam.counts".format(dir = config["output"]["bam"]),
+#        lengths = strip_ext(config["ref"]["file"]) + ".fna.fai.lengths"
+#    output:
+#        fa = "{dir}/{{id}}.fa".format(dir = config["output"]["fasta"])
+#        # pipe screen summary to txt file later
+#    threads: 1
+#    resources:
+#        mem_gb = 144 # temporarily increased from 48 bc there was not enough mem for LTI13, LTI6 and wmLPA
+#    params:
+#        script = config["scripts"]["consensify"]
+#    shell:
+#        "perl {params.script} {input.pos} {input.counts} {input.lengths} {output.fa} 25"
+

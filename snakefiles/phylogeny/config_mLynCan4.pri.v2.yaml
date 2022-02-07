@@ -1,0 +1,20 @@
+# Config file of Snakefile phylogeny
+# Load environment from within jonasl environment with $ conda activate phylogeny
+
+metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2021APR10.tsv
+
+ref:
+    species: "Lynx Canadensis"
+    assembly: "mLynCan4.pri.v2"
+    file: /media/labgenoma4/DATAPART7/duda_grupo/references/mLynCan4.pri.v2/GCA_007474595.2_mLynCan4.pri.v2_genomic.fna.gz
+
+input:
+    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2/repeatmasked/100kb40/windows
+    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2/repeatmasked/100kb40/filenames_informative.txt
+
+output: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/phylogeny_mLynCan4.pri.v2/repeatmasked/100kb40
+
+outgroup: "PumCon1.0"
+
+bin:
+    astral: /media/labgenoma4/DATAPART4/jonasl/bin/ASTRAL/Astral.5.7.8/astral.5.7.8.jar

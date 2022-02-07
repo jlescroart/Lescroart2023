@@ -1,0 +1,21 @@
+# Config file of Snakefile fastq2mtdna
+# Load environment from within jonasl environment with $ conda activate fastq2mtdna
+
+metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2021APR10.tsv
+
+ref:
+    species: "Lynx canadensis"
+    assembly: "mLynCan4.pri.v2"
+    chromosome_tag: "CM"
+    mitogenome: "CM017348.2"
+    file: /media/labgenoma4/DATAPART7/duda_grupo/references/mLynCan4.pri.v2/GCA_007474595.2_mLynCan4.pri.v2_genomic.fna.gz
+
+output:
+    mtdna: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/mtdna_mLynCan4.pri.v2
+
+software:
+    mira: /media/labgenoma4/DATAPART4/jonasl/bin/mira_4.0.2/bin/
+    mitobim: /media/labgenoma4/DATAPART4/jonasl/bin/MITObim/MITObim.pl
+
+scripts:
+    interleave: /media/labgenoma4/DATAPART4/jonasl/scripts/interleave-fastqgz-MITOBIM.py

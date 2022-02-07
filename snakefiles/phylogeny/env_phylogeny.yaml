@@ -1,0 +1,17 @@
+name: phylogeny
+channels:
+  - defaults
+  - conda-forge
+  - bioconda
+  - etetoolkit
+  - dranew
+dependencies:
+  - raxml
+  - snakemake
+  - newick_utils
+  - python-newick
+  - muscle
+  - dendropy
+  - mamba
+  - java-jdk
+prefix: /apps/conda/jonasl/envs/phylogeny

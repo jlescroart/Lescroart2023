@@ -1,0 +1,11 @@
+name: fastq2mtdna
+channels:
+  - defaults
+  - conda-forge
+  - bioconda
+  - etetoolkit
+  - dranew
+dependencies:
+  - snakemake
+  - biopython
+prefix: /apps/conda/jonasl/envs/fastq2mtdna

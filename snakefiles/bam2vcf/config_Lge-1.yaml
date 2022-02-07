@@ -1,0 +1,25 @@
+# Config file of Snakefile bam2vcf
+# Load environment from within jonasl environment with $ conda activate bam2vcf
+
+metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2021APR10.tsv
+
+ref:
+    species: "Leopardus geoffroyi"
+    assembly: "Lge-1"
+    chromosome_tag: "chr"
+    file: /media/labgenoma4/DATAPART7/duda_grupo/references/Lge_Assembly_v1/Lge-1_final.fna.gz
+
+outgroup: "PumCon1.0"
+
+input:
+    bam: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/bam_Lge-1 
+
+output:
+    vcf: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/vcf_Lge-1
+
+bin:
+    variantqc: /media/labgenoma4/DATAPART4/jonasl/bin/DISCVRSeq/DISCVRSeq-1.3.9.jar
+
+scripts:
+    plot_plink_pca: /media/labgenoma4/DATAPART4/jonasl/scripts/plot_plink_pca.py
+
