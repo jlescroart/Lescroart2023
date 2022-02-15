@@ -8,4 +8,5 @@ channels:
 dependencies:
   - snakemake
   - biopython
+  - muscle
 prefix: /apps/conda/jonasl/envs/fastq2mtdna

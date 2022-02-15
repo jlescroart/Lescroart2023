@@ -10,6 +10,8 @@ ref:
     mitogenome: "CM017348.2"
     file: /media/labgenoma4/DATAPART7/duda_grupo/references/mLynCan4.pri.v2/GCA_007474595.2_mLynCan4.pri.v2_genomic.fna.gz
 
+outgroup: "PumCon1.0"
+
 output:
     mtdna: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/mtdna_mLynCan4.pri.v2
 
@@ -19,3 +21,6 @@ software:
 
 scripts:
     interleave: /media/labgenoma4/DATAPART4/jonasl/scripts/interleave-fastqgz-MITOBIM.py
+    createWindow_aln: /media/labgenoma4/DATAPART4/jonasl/scripts/createWindow_aln_JL.py
+    diagnose_fasta: /media/labgenoma4/DATAPART4/jonasl/scripts/diagnose_fasta.py
+

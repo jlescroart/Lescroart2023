@@ -44,8 +44,8 @@ unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
 ### Rules
 rule all:
     input:
-        #expand("{dir}/{{id}}_mitobim/".format(dir = config["output"]["mtdna"]), id = unique_id)
-        expand("{dir}/{{id}}.fasta".format(dir = config["output"]["mtdna"]), id = unique_id)
+        "{dir}/mitogenome_unaligned.info".format(dir = config["output"]["mtdna"]),
+        "{dir}/mitogenome_raxml_bs.nwk".format(dir = config["output"]["mtdna"])
 
 rule gunzip:
     input:
@@ -60,9 +60,11 @@ rule mitogenome:
         fna = strip_ext(config["ref"]["file"]) + ".fna"
     output:
         fa = "{dir}/".format(dir = config["output"]["mtdna"]) + config["ref"]["assembly"] + "_mitogenome.fa" 
+    params:
+        mitogenome = config["ref"]["mitogenome"]
     run:
         record_dict = SeqIO.index(input.fna, "fasta")
-        mtdna = record_dict[config["ref"]["mitogenome"]]
+        mtdna = record_dict[params.mitogenome]
         with open(output.fa, 'w') as outfile:
             SeqIO.write(mtdna, outfile, "fasta")
 
@@ -81,7 +83,7 @@ rule mitobim:
         fastq = "{dir}/{{id}}_interleaved.fastq".format(dir = config["output"]["mtdna"]),
         fa = "{dir}/".format(dir = config["output"]["mtdna"]) + config["ref"]["assembly"] + "_mitogenome.fa"
     output:
-        fasta = "{dir}/{{id}}.fasta".format(dir = config["output"]["mtdna"])
+        fasta = temp("{dir}/{{id}}_bb.fasta".format(dir = config["output"]["mtdna"]))
     params:
         mira = config["software"]["mira"],
         mitobim = config["software"]["mitobim"],
@@ -102,21 +104,83 @@ rule mitobim:
         shell("mv {target} {output.fasta}")
         shell("rm -r {params.sample_dir}")
 
-# Old code, didn't work because of an issue with MITObim?
-        # Start to loop through MITObim iterations
-#        for i in range(15):
-#            shell("{params.mitobim} --mirapath {params.mira} -start {i} -end {i} --trimreads -sample {params.figure_id} -ref {params.ref} -readpool {input.fastq} --quick {input.fa}")
-            # Delete previous iterations to free up disk space
-#            if i > 1:
-#                i_rm = i - 1
-#                path_rm = params.sample_dir + "/iteration" + str(i_rm)
-#                shell("rm -r {path_rm}")
-            # Stop loop when current iteration produces final fasta, clean up all iteration files
-            # Fasta considered final when it doesn't contain N gaps of length 5 or more
-#            target = params.sample_dir + "/iteration" + str(i) + "/" + params.figure_id + "-" + params.ref + "-it" + str(i) + "_noIUPAC.fasta"
-#            mtdna = SeqIO.read(target, "fasta")
-#            if not re.search("N"*5, mtdna.format("fasta")):
-#                shell("mv {target} {output.fasta}")
-#                shell("rm -r {params.sample_dir}")
-#                break
+rule record_id:
+    input:
+        fasta = "{dir}/{{id}}_bb.fasta".format(dir = config["output"]["mtdna"])
+    output:
+        fasta = protected("{dir}/{{id}}.fasta".format(dir = config["output"]["mtdna"]))
+    params:
+        mitogenome = config["ref"]["mitogenome"]
+    run:
+        record = SeqIO.read(input.fasta, "fasta")
+        record.id = params.mitogenome
+        record.name = ""
+        record.description = ""
+        SeqIO.write(record.upper(), output.fasta, "fasta")
+
+rule createWindow_aln:
+    input:
+        fasta = expand("{dir}/{{id}}.fasta".format(dir = config["output"]["mtdna"]), id = unique_id)
+    output:
+        fasta = temp("{dir}/mitogenome_unaligned_unique_id.fasta".format(dir = config["output"]["mtdna"]))
+    params:
+        cwd = config["output"]["mtdna"],
+        script = config["scripts"]["createWindow_aln"],
+        fasta = "{dir}/windows/".format(dir = config["output"]["mtdna"]) + config["ref"]["mitogenome"] + ".fasta",
+        dir = "{dir}/windows/".format(dir = config["output"]["mtdna"]),
+        txt = "{dir}/filenames.txt".format(dir = config["output"]["mtdna"])
+    shell:
+        "cd {params.cwd} && " +
+        "python {params.script} {input.fasta} && " +
+        "mv {params.fasta} {output.fasta} && " +
+        "rm -r {params.dir} && rm {params.txt}"
+
+rule unique_id2figure_id:
+    input:
+        fasta = "{dir}/mitogenome_unaligned_unique_id.fasta".format(dir = config["output"]["mtdna"])
+    output:
+        fasta = "{dir}/mitogenome_unaligned.fasta".format(dir = config["output"]["mtdna"])
+    run:
+        with open(output.fasta, "w") as out:
+            for line in shell("cat {input.fasta}", iterable = True):
+                for id in unique_id:
+                    line = re.sub(id, metadata["figure_id"][id], line)
+                out.write(line + "\n")
+
+rule diagnose_fasta:
+    input:
+        fasta = "{dir}/mitogenome_unaligned.fasta".format(dir = config["output"]["mtdna"])
+    output:
+        info = "{dir}/mitogenome_unaligned.info".format(dir = config["output"]["mtdna"])
+    params:
+        script = config["scripts"]["diagnose_fasta"]
+    shell:
+        "python {params.script} {input.fasta}"
+
+rule muscle:
+    input:
+        fasta = "{dir}/mitogenome_unaligned.fasta".format(dir = config["output"]["mtdna"])
+    output:
+        fasta = "{dir}/mitogenome_alignment.fasta".format(dir = config["output"]["mtdna"])
+    threads: 4
+    shell:
+        "muscle -threads {threads} -align {input.fasta} -output {output.fasta}"
+
+rule raxml:
+    input:
+        fasta = "{dir}/mitogenome_alignment.fasta".format(dir = config["output"]["mtdna"])
+    output:
+        nwk = "{dir}/mitogenome_raxml_bs.nwk".format(dir = config["output"]["mtdna"]),
+        log = "{dir}/mitogenome_raxml_bs.log".format(dir = config["output"]["mtdna"])
+    threads: 4
+    params:
+        outdir = config["output"]["mtdna"],
+        outgroup = metadata.loc[config["outgroup"]]["figure_id"],
+        tag = "temp"
+    shell:
+        "raxmlHPC-PTHREADS -T {threads} -m GTRGAMMA -f a -N 1000 -p 8 -x 8 -o {params.outgroup} -s {input.fasta} -w {params.outdir} -n {params.tag} && " +
+        "mv {params.outdir}/RAxML_bipartitions.{params.tag} {output.nwk} && " +
+        "mv {params.outdir}/RAxML_info.{params.tag} {output.log} && " +
+        "rm {params.outdir}/RAxML_bipartitionsBranchLabels.{params.tag} {params.outdir}/RAxML_bestTree.{params.tag} {params.outdir}/RAxML_bootstrap.{params.tag}"
+
 
