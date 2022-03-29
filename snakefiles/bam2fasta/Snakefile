@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 ### Configuration
-configfile: "config_Lge-1.yaml"
+configfile: "config_mLynCan4.pri.v2.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -34,10 +34,11 @@ for chr in ref_fai["chromosome"]:
         unique_chr.append(chr)
 
 unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
+unique_id.remove("bLge-252")
 
 # Working with a pruned sample set that contains only one sample per taxon
-excluded_id = ["LPA-6", "LP339", "LCO-3", "LTI-32454", "LTI-6", "LTI-13", "bLge-252"]
-unique_id = [id for id in unique_id if id not in excluded_id]
+#excluded_id = ["LPA-6", "LP339", "LCO-3", "LTI-32454", "LTI-6", "LTI-13"]
+#unique_id = [id for id in unique_id if id not in excluded_id]
 
 ### Rules
 rule all:

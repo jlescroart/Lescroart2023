@@ -1,0 +1,29 @@
+# Config file of Snakefile diversity
+# Load environment from within jonal environment with $ conda activate diversity
+
+metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2021APR10.tsv
+
+ref:
+    species: "Lynx canadensis"
+    assembly: "mLynCan4.pri.v2"
+    file: /media/labgenoma4/DATAPART7/duda_grupo/references/mLynCan4.pri.v2/GCA_007474595.2_mLynCan4.pri.v2_genomic.fna.gz
+
+input:
+    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2/unmasked/100kb40/windows
+    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2/unmasked/100kb40/filenames_informative.txt
+
+angsd:
+    bam_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/bam_mLynCan4.pri.v2
+    rf: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/diversity_mLynCan4.pri.v2/heterozygosity/autosomes.rf.txt # This file needs to be manually created in the format acceptable to ANGSD
+    auto: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/diversity_mLynCan4.pri.v2/roh/autosomes.txt # This file needs to be manually created in the format acceptable to ROHan
+
+output:
+    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/diversity_mLynCan4.pri.v2/unmasked/100kb40
+    heterozygosity: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/diversity_mLynCan4.pri.v2/heterozygosity
+    roh: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/diversity_mLynCan4.pri.v2/roh
+
+scripts:
+    pairwise_pi: /media/labgenoma4/DATAPART4/jonasl/scripts/pairwise_pi.py
+    pairwise_pi_plot: /media/labgenoma4/DATAPART4/jonasl/scripts/pairwise_pi_plot.py
+    getHetvalues_folded: /media/labgenoma4/DATAPART4/jonasl/scripts/getHetvalues_folded.py
+    rohan: /media/labgenoma4/DATAPART4/jonasl/bin/rohan/src/rohan

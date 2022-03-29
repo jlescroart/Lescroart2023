@@ -14,7 +14,7 @@ input:
     bam: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/bam_Lge-1 
 
 output:
-    fasta: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1_pruned
+    fasta: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1
 
 scripts:
     createWindow_aln: /media/labgenoma4/DATAPART4/jonasl/scripts/createWindow_aln_JL.py

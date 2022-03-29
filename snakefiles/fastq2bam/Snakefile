@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 ### Configuration
-configfile: "config_felCat9.yaml"
+configfile: "config_mLynCan4.pri.v2.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -37,6 +37,7 @@ metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python", encodi
 unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
 #print(unique_id)
 unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
+unique_id.remove("bLge-252")
 
 #unique_id = ["OGE-3"] # To test with 1 individual
 

@@ -40,6 +40,7 @@ metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python", encodi
 unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
 
 unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
+unique_id.remove("bLge-252")
 
 ### Rules
 rule all:
@@ -108,7 +109,7 @@ rule record_id:
     input:
         fasta = "{dir}/{{id}}_bb.fasta".format(dir = config["output"]["mtdna"])
     output:
-        fasta = protected("{dir}/{{id}}.fasta".format(dir = config["output"]["mtdna"]))
+        fasta = "{dir}/{{id}}.fasta".format(dir = config["output"]["mtdna"])
     params:
         mitogenome = config["ref"]["mitogenome"]
     run:

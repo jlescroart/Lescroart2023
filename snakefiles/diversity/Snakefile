@@ -10,7 +10,7 @@ from pathlib import Path
 import skbio
 
 ### Configuration
-configfile: "config_Lge-1.yaml"
+configfile: "config_mLynCan4.pri.v2.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -40,6 +40,7 @@ metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python", encodi
 unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
 
 unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
+unique_id.remove("bLge-252")
 
 genomic_fragments = pd.read_csv(config["input"]["filenames"], names = ["file"], engine = "python")
 unique_gf = [strip_ext(gf) for gf in genomic_fragments["file"].astype(str).tolist()]
@@ -47,11 +48,11 @@ unique_gf = [strip_ext(gf) for gf in genomic_fragments["file"].astype(str).tolis
 ### Rules
 rule all:
     input:
-        expand("{dir}/pairwise_pi/fragments/{{gf}}.nwk".format(dir = config["output"]["fragments_dir"]), gf = unique_gf),
-        "{dir}/pairwise_pi/average_pairwise_pi.csv".format(dir = config["output"]["fragments_dir"])
-        #"{dir}/pairwise_pi/average_pairwise_pi.nwk".format(dir = config["output"]["fragments_dir"]),
+        #expand("{dir}/pairwise_pi/fragments/{{gf}}.nwk".format(dir = config["output"]["fragments_dir"]), gf = unique_gf),
+        "{dir}/pairwise_pi/all_NJ.nwk".format(dir = config["output"]["fragments_dir"]),
+        "{dir}/pairwise_pi/average_pairwise_pi.nwk".format(dir = config["output"]["fragments_dir"]),
         #"{dir}/leopardus_heterozygosity.txt".format(dir = config["output"]["heterozygosity"]),
-        #expand("{dir}/{{id}}.summary.txt".format(dir = config["output"]["roh"]), id = unique_id)
+        expand("{dir}/{{id}}.summary.txt".format(dir = config["output"]["roh"]), id = unique_id)
 
 rule pairwise_pi:
     input:
@@ -75,14 +76,6 @@ rule unique_id2figure_id_pairwise_pi:
                     line = re.sub(id, metadata["figure_id"][id], line)
                 out.write(line + "\n")
 
-rule csv2nwk:
-    input:
-        csv = "{dir}/pairwise_pi/fragments/{{gf}}.csv".format(dir = config["output"]["fragments_dir"])
-    output:
-        nwk = "{dir}/pairwise_pi/fragments/{{gf}}.nwk".format(dir = config["output"]["fragments_dir"])
-    run:
-        csv2nwk(input.csv, output.nwk)
-
 rule filenames:
     input:
         csv = expand("{dir}/pairwise_pi/fragments/{{gf}}.csv".format(dir = config["output"]["fragments_dir"]), gf = unique_gf)
@@ -91,7 +84,7 @@ rule filenames:
     params:
         dir = "{dir}/pairwise_pi/fragments/".format(dir = config["output"]["fragments_dir"])
     shell:
-        "find {params.dir} -type f > {output.txt}"
+        "find {params.dir} -type f -name '*.csv' > {output.txt}"
 
 #this needs work
 rule pairwise_pi_plot:
@@ -105,7 +98,32 @@ rule pairwise_pi_plot:
     shell:
         "python3 {params.script} --list {input.txt} --output {output.csv}"
 
-#Add NJ from average pi
+rule csv2nwk_average:
+    input:
+        csv = "{dir}/pairwise_pi/average_pairwise_pi.csv".format(dir = config["output"]["fragments_dir"])
+    output:
+        nwk = "{dir}/pairwise_pi/average_pairwise_pi.nwk".format(dir = config["output"]["fragments_dir"])
+    run:
+        csv2nwk(input.csv, output.nwk)
+
+### Local NJ trees part
+rule csv2nwk_average as csv2nwk_fragments with:
+    input:
+        csv = "{dir}/pairwise_pi/fragments/{{gf}}.csv".format(dir = config["output"]["fragments_dir"])
+    output:
+        nwk = "{dir}/pairwise_pi/fragments/{{gf}}.nwk".format(dir = config["output"]["fragments_dir"])
+
+rule cat_nwk:
+    input:
+        nwk = expand("{dir}/pairwise_pi/fragments/{{gf}}.nwk".format(dir = config["output"]["fragments_dir"]), gf = unique_gf)
+    output:
+        nwk = "{dir}/pairwise_pi/all_NJ.nwk".format(dir = config["output"]["fragments_dir"])
+    params:
+        dir = "{dir}/pairwise_pi/fragments/".format(dir = config["output"]["fragments_dir"])
+    shell:
+        "find {params.dir} -type f -name '*.nwk' | xargs awk '{{print}}' > {output.nwk}"
+# trees need to be rooted to outgroup with nw_reroot all_nj.nwk Puma_concolor
+
 
 ### Rules for heterozygosity. Needs ANGSD v0.921, doesn't work with more recent versions.
 rule gunzip:

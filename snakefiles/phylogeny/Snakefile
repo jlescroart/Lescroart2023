@@ -24,10 +24,13 @@ metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python").set_in
 unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
 
 unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
+unique_id.remove("bLge-252")
 
 # Working with a pruned sample set that contains only one sample per taxon
 #excluded_id = ["LPA-6", "LP339", "LCO-3", "LTI-32454", "LTI-6", "LTI-13", "bLge-252"]
 #unique_id = [id for id in unique_id if id not in excluded_id]
+
+figure_id = [metadata.loc[id]["figure_id"] for id in unique_id]
 
 genomic_fragments = pd.read_csv(config["input"]["filenames"], names = ["file"], engine = "python")
 unique_gf = [strip_ext(gf) for gf in genomic_fragments["file"].astype(str).tolist()]
@@ -38,13 +41,15 @@ rule all:
         #expand("{dir}/raxml/RAxML_bestTree.{{gf}}".format(dir = config["output"]), gf = unique_gf),
         #expand("{dir}/muscle/{{gf}}.tmp.nwk".format(dir = config["output"]), gf = unique_gf),
         "{dir}/unique_raxml_topologies_count.nwk".format(dir = config["output"]),
-        "{dir}/unique_NJ_topologies_count.nwk".format(dir = config["output"]),
+        #"{dir}/unique_NJ_topologies_count.nwk".format(dir = config["output"]),
         "{dir}/majority_consensus_raxml.tre".format(dir = config["output"]),
-        "{dir}/majority_consensus_NJ.tre".format(dir = config["output"]),
+        #"{dir}/majority_consensus_NJ.tre".format(dir = config["output"]),
         "{dir}/mcct_raxml.tre".format(dir = config["output"]),
-        "{dir}/mcct_NJ.tre".format(dir = config["output"]),
+        #"{dir}/mcct_NJ.tre".format(dir = config["output"]),
         "{dir}/astral_raxml.nwk".format(dir = config["output"]),
-        "{dir}/astral_NJ.nwk".format(dir = config["output"])
+        #"{dir}/astral_NJ.nwk".format(dir = config["output"])
+        "{dir}/phyutility/leaf_stability_index_raxml.txt".format(dir = config["output"]),
+        expand("{dir}/phyutility/baf_{{id}}_raxml.tre".format(dir = config["output"]), id = figure_id)
 
 rule raxml:
     input:
@@ -143,6 +148,28 @@ rule astral_raxml:
     shell:
         "java -jar {params.astral} --outgroup {params.outgroup}  -i {input.nwk} -o {output.nwk}"
 # When reporting tree, use -q option of astral to see it's score, and capture stderr with 2> some_file
+
+rule lsi:
+    input:
+        nwk = "{dir}/all_raxml.nwk".format(dir = config["output"])
+    output:
+        txt = "{dir}/phyutility/leaf_stability_index_raxml.txt".format(dir = config["output"])
+    params:
+        phyutility = config["bin"]["phyutility"]
+    shell:
+        "java -jar {params.phyutility} -ls -in {input.nwk} > {output.txt}"
+
+rule baf:
+    input:
+        nwk = "{dir}/all_raxml.nwk".format(dir = config["output"]),
+        tre = "{dir}/majority_consensus_raxml.tre".format(dir = config["output"])
+    output:
+        tre = "{dir}/phyutility/baf_{{id}}_raxml.tre".format(dir = config["output"])
+    params:
+        phyutility = config["bin"]["phyutility"],
+        figure_id = lambda wildcards: wildcards.id
+    shell:
+        "java -jar {params.phyutility} -lm -in {input.nwk} -tree {input.tre} -out {output.tre} -names {params.figure_id}"
 
 rule muscle:
     input:
