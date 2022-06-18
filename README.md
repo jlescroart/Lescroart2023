@@ -3,7 +3,7 @@ Scripts for phylogenomic research in the genus *Leopardus*.
 
 Snakemake code consists of six interlinked pipelines: (1) QC and mapping of raw reads (‘fastq2bam’), (2) assemblage of mitogenomes from raw reads and subsequent phylogenetic analysis (‘fastq2mtdna’), (3, 4) base calling into consensus genomes and a SNP data set (resp. ‘bam2fasta’ and ‘bam2vcf’), (5) phylogenomic analysis (‘phylogeny’), and (6) genomic diversity measures (‘diversity’). For a quick overview of each pipeline, see the associated rulegraphs. Each pipeline comes with its own Conda environment (specs_\*.txt).
 
-https://www.researchgate.net/project/Phylogenomics-of-Neotropical-small-felids
+https://www.researchgate.net/project/phylogenomics-of-neotropical-small-felids
 
 #### Abstract - The use of alternative genomic markers to reconstruct the complex evolutionary history of Neotropical small felids
 
