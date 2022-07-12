@@ -10,7 +10,7 @@ from pathlib import Path
 import skbio
 
 ### Configuration
-configfile: "config_mLynCan4.pri.v2.yaml"
+configfile: "config_Lge-1.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -36,7 +36,7 @@ def csv2nwk(infile_csv, outfile_nwk):
             nwk.write(nj_newick)
 
 ### Variables
-metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python", encoding="latin-1").set_index("unique_id", drop = False)
+metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python", encoding = "latin-1").set_index("unique_id", drop = False)
 unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
 
 unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
@@ -45,14 +45,18 @@ unique_id.remove("bLge-252")
 genomic_fragments = pd.read_csv(config["input"]["filenames"], names = ["file"], engine = "python")
 unique_gf = [strip_ext(gf) for gf in genomic_fragments["file"].astype(str).tolist()]
 
+autosomes = pd.read_csv(config["input"]["auto"], header = None, engine = "python", encoding = "latin-1")
+autosomes = [chr for chr in autosomes[0].astype(str).tolist()]
+
 ### Rules
 rule all:
     input:
         #expand("{dir}/pairwise_pi/fragments/{{gf}}.nwk".format(dir = config["output"]["fragments_dir"]), gf = unique_gf),
-        "{dir}/pairwise_pi/all_NJ.nwk".format(dir = config["output"]["fragments_dir"]),
-        "{dir}/pairwise_pi/average_pairwise_pi.nwk".format(dir = config["output"]["fragments_dir"]),
-        #"{dir}/leopardus_heterozygosity.txt".format(dir = config["output"]["heterozygosity"]),
-        expand("{dir}/{{id}}.summary.txt".format(dir = config["output"]["roh"]), id = unique_id)
+        #"{dir}/pairwise_pi/all_NJ.nwk".format(dir = config["output"]["fragments_dir"]),
+        #"{dir}/pairwise_pi/average_pairwise_pi.nwk".format(dir = config["output"]["fragments_dir"]),
+        "{dir}/leopardus_heterozygosity.txt".format(dir = config["output"]["heterozygosity"]),
+        expand("{dir}/{{id}}.summary.txt".format(dir = config["output"]["roh"]), id = unique_id),
+        expand("{dir}/{{id}}.final.txt".format(dir = config["output"]["demography"]), id = unique_id)
 
 rule pairwise_pi:
     input:
@@ -136,7 +140,7 @@ rule gunzip:
 
 rule angsd:
     input:
-        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["angsd"]["bam_dir"]), 
+        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["input"]["bam_dir"]), 
         fna = strip_ext(config["ref"]["file"]) + ".fna"
     output:
         idx = "{dir}/{{id}}.saf.idx".format(dir = config["output"]["heterozygosity"])
@@ -200,18 +204,84 @@ rule het_plot:
 
 rule rohan:
     input:
-        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["angsd"]["bam_dir"]),
-        fna = strip_ext(config["ref"]["file"]) + ".fna"
+        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["input"]["bam_dir"]),
+        fna = strip_ext(config["ref"]["file"]) + ".fna",
+        txt = config["input"]["auto"]
     output:
         txt = "{dir}/{{id}}.summary.txt".format(dir = config["output"]["roh"])
     threads: 4
     params:
         id = "{dir}/{{id}}".format(dir = config["output"]["roh"]),
-        #dir = config["output"]["roh"],
-        auto = config["angsd"]["auto"],
-        exe = config["scripts"]["rohan"]
+        rohan = config["rohan"]["rohan"],
+        rohmu = config["rohan"]["rohmu"]
     shell:
-        "{params.exe} --rohmu 2e-4 -t {threads} --auto {params.auto} -o {params.id} {input.fna} {input.bam}"
+        "{params.rohan} --rohmu {params.rohmu} -t {threads} --auto {input.txt} -o {params.id} {input.fna} {input.bam}"
 
 # see also bcftools roh [OPTIONS] file.vcf.gz for ROHs
 
+### Rules for demographic history.
+rule snpable:
+    input:
+        fna = strip_ext(config["ref"]["file"]) + ".fna"
+    output:
+        bed = "{dir}/mappability/mappable_99.bed.gz".format(dir = config["output"]["demography"]),
+        tbi = "{dir}/mappability/mappable_99.bed.gz.tbi".format(dir = config["output"]["demography"]),
+        fa = "{dir}/mappability/rawMask_35.fa.gz".format(dir = config["output"]["demography"])
+    threads: 10
+    params:
+        script = config["scripts"]["snpable"],
+        script_dir = config["seqbility_dir"],
+        dir = "{dir}/mappability".format(dir = config["output"]["demography"])
+    shell:
+        "cd {params.dir} && bash {params.script} {input.fna} {params.script_dir}"
+
+rule samtools_depth:
+    input:
+        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["input"]["bam_dir"])
+    output:
+        txt = temp("{dir}/{{id}}_{{chr}}_depth.txt".format(dir = config["output"]["demography"]))
+    params:
+        chr = "{chr}"
+    shell:
+        "samtools depth -r {params.chr} {input.bam} | awk '{{sum += $3}} END {{print sum / NR}}' > {output.txt}"
+
+rule bamCaller:
+    input:
+        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["input"]["bam_dir"]),
+        fna = strip_ext(config["ref"]["file"]) + ".fna",
+        txt = "{dir}/{{id}}_{{chr}}_depth.txt".format(dir = config["output"]["demography"])
+    output:
+        bed = temp("{dir}/{{id}}_{{chr}}_mask.bed.gz".format(dir = config["output"]["demography"])),
+        vcf = temp("{dir}/{{id}}_{{chr}}.vcf.gz".format(dir = config["output"]["demography"]))
+    params:
+        script = config["scripts"]["bamCaller"],
+        chr = "{chr}"
+    shell:
+        "DEPTH=$(cat {input.txt}) && " +
+        "samtools mpileup --min-MQ 30 --min-BQ 20 -C 50 -u -r {params.chr} -f {input.fna} {input.bam} | bcftools call -c -V indels | {params.script} $DEPTH {output.bed} | gzip -c > {output.vcf}"
+
+rule multihetsep:
+    input:
+        ref_bed = "{dir}/mappability/mappable_99.bed.gz".format(dir = config["output"]["demography"]),
+        sample_bed = "{dir}/{{id}}_{{chr}}_mask.bed.gz".format(dir = config["output"]["demography"]),
+        vcf = "{dir}/{{id}}_{{chr}}.vcf.gz".format(dir = config["output"]["demography"])
+    output:
+        txt = temp("{dir}/{{id}}_{{chr}}_multihetsep.txt".format(dir = config["output"]["demography"]))
+    params:
+        script = config["scripts"]["multihetsep"]
+    shell:
+        "python {params.script} --mask {input.ref_bed} --mask {input.sample_bed} {input.vcf} > {output.txt}"
+
+rule msmc2:
+    input:
+        txt = expand(config["output"]["demography"] + "/{{id}}_{chr}_multihetsep.txt", chr = autosomes)
+    output:
+        final_txt = "{dir}/{{id}}.final.txt".format(dir = config["output"]["demography"]),
+        loop_txt = temp("{dir}/{{id}}.loop.txt".format(dir = config["output"]["demography"])),
+        log = "{dir}/{{id}}.log".format(dir = config["output"]["demography"])
+    threads: 4
+    params:
+        msmc2 = config["msmc2"],
+        prefix = "{dir}/{{id}}".format(dir = config["output"]["demography"])
+    shell:
+        "{params.msmc2} --nrThreads {threads} -o {params.prefix} {input.txt}"
