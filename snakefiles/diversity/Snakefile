@@ -8,6 +8,7 @@ import pandas as pd
 import re
 from pathlib import Path
 import skbio
+import shutil
 
 ### Configuration
 configfile: "config_Lge-1.yaml"
@@ -56,7 +57,9 @@ rule all:
         #"{dir}/pairwise_pi/average_pairwise_pi.nwk".format(dir = config["output"]["fragments_dir"]),
         "{dir}/leopardus_heterozygosity.txt".format(dir = config["output"]["heterozygosity"]),
         expand("{dir}/{{id}}.summary.txt".format(dir = config["output"]["roh"]), id = unique_id),
-        expand("{dir}/{{id}}.final.txt".format(dir = config["output"]["demography"]), id = unique_id)
+        "{dir}/figure_id.done".format(dir = config["output"]["demography"]),
+        #expand("{dir}/bootstrap/{{id}}_bs_20.final.txt".format(dir = config["output"]["demography"]), id = unique_id),
+        "{dir}/bootstrap/msmc2_bs_leopardus.pdf".format(dir = config["output"]["demography"])
 
 rule pairwise_pi:
     input:
@@ -251,8 +254,9 @@ rule bamCaller:
         fna = strip_ext(config["ref"]["file"]) + ".fna",
         txt = "{dir}/{{id}}_{{chr}}_depth.txt".format(dir = config["output"]["demography"])
     output:
-        bed = temp("{dir}/{{id}}_{{chr}}_mask.bed.gz".format(dir = config["output"]["demography"])),
-        vcf = temp("{dir}/{{id}}_{{chr}}.vcf.gz".format(dir = config["output"]["demography"]))
+        bed = "{dir}/mask/{{id}}_{{chr}}_mask.bed.gz".format(dir = config["output"]["demography"]),
+        vcf = "{dir}/vcf/{{id}}_{{chr}}.vcf.gz".format(dir = config["output"]["demography"])
+    threads: 2
     params:
         script = config["scripts"]["bamCaller"],
         chr = "{chr}"
@@ -263,10 +267,10 @@ rule bamCaller:
 rule multihetsep:
     input:
         ref_bed = "{dir}/mappability/mappable_99.bed.gz".format(dir = config["output"]["demography"]),
-        sample_bed = "{dir}/{{id}}_{{chr}}_mask.bed.gz".format(dir = config["output"]["demography"]),
-        vcf = "{dir}/{{id}}_{{chr}}.vcf.gz".format(dir = config["output"]["demography"])
+        sample_bed = "{dir}/mask/{{id}}_{{chr}}_mask.bed.gz".format(dir = config["output"]["demography"]),
+        vcf = "{dir}/vcf/{{id}}_{{chr}}.vcf.gz".format(dir = config["output"]["demography"])
     output:
-        txt = temp("{dir}/{{id}}_{{chr}}_multihetsep.txt".format(dir = config["output"]["demography"]))
+        txt = "{dir}/multihetsep/{{id}}_{{chr}}_multihetsep.txt".format(dir = config["output"]["demography"])
     params:
         script = config["scripts"]["multihetsep"]
     shell:
@@ -274,14 +278,73 @@ rule multihetsep:
 
 rule msmc2:
     input:
-        txt = expand(config["output"]["demography"] + "/{{id}}_{chr}_multihetsep.txt", chr = autosomes)
+        txt = expand(config["output"]["demography"] + "/multihetsep/{{id}}_{chr}_multihetsep.txt", chr = autosomes)
     output:
         final_txt = "{dir}/{{id}}.final.txt".format(dir = config["output"]["demography"]),
         loop_txt = temp("{dir}/{{id}}.loop.txt".format(dir = config["output"]["demography"])),
         log = "{dir}/{{id}}.log".format(dir = config["output"]["demography"])
-    threads: 4
+    threads: 1
     params:
         msmc2 = config["msmc2"],
         prefix = "{dir}/{{id}}".format(dir = config["output"]["demography"])
     shell:
         "{params.msmc2} --nrThreads {threads} -o {params.prefix} {input.txt}"
+
+#rep = [str(i) for i in range(1,21)]
+
+rule multihetsep_bs:
+    input:
+        txt = expand(config["output"]["demography"] + "/multihetsep/{{id}}_{chr}_multihetsep.txt", chr = autosomes)
+    output:
+        txt = "{dir}/bootstrap/{{id}}_bs_20/bootstrap_multihetsep.chr1.txt".format(dir = config["output"]["demography"])
+    params:
+        script = config["scripts"]["multihetsep_bs"],
+        nr = len(autosomes),
+        prefix = "{dir}/bootstrap/{{id}}_bs".format(dir = config["output"]["demography"])
+    shell:
+        "python {params.script} -n 20 --nr_chromosomes {params.nr} --seed 8 {params.prefix} {input.txt}"
+
+rule msmc2_bs:
+    input:
+        txt = "{dir}/bootstrap/{{id}}_bs_20/bootstrap_multihetsep.chr1.txt".format(dir = config["output"]["demography"])
+    output:
+        final_txt = "{dir}/bootstrap/{{id}}_bs_20.final.txt".format(dir = config["output"]["demography"]),
+        loop_txt = temp("{dir}/bootstrap/{{id}}_bs_20.loop.txt".format(dir = config["output"]["demography"])),
+        log = temp("{dir}/bootstrap/{{id}}_bs_20.log".format(dir = config["output"]["demography"]))
+    threads: 1
+    params:
+        msmc2 = config["msmc2"],
+        prefix = "{dir}/bootstrap/{{id}}_bs_$i".format(dir = config["output"]["demography"])
+    shell:
+        "for i in {{1..20}}; do {params.msmc2} --nrThreads {threads} -o {params.prefix} {params.prefix}/bootstrap*.txt; done"
+
+rule unique_id2figure_id_msmc2:
+    input:
+        txt = expand("{dir}/{{id}}.final.txt".format(dir = config["output"]["demography"]), id = unique_id),
+        log = expand("{dir}/{{id}}.log".format(dir = config["output"]["demography"]), id = unique_id)
+    output: touch("{dir}/figure_id.done".format(dir = config["output"]["demography"]))
+    run:
+       for id in unique_id:
+           shutil.copyfile(config["output"]["demography"] + '/' + id + ".final.txt", config["output"]["demography"] + '/' + metadata.loc[id]["figure_id"] + ".final.txt")
+           shutil.copyfile(config["output"]["demography"] + '/' + id + ".log", config["output"]["demography"] + '/' + metadata.loc[id]["figure_id"] + ".log")
+
+rule msmc2_plot:
+    input:
+        txt = "{dir}/{{id}}.final.txt".format(dir = config["output"]["demography"]),
+        txt_bs = "{dir}/bootstrap/{{id}}_bs_20.final.txt".format(dir = config["output"]["demography"])
+    output:
+        pdf = "{dir}/bootstrap/{{id}}.pdf".format(dir = config["output"]["demography"])
+    params:
+        script = config["scripts"]["msmc2_plot"],
+        txt_bs = "{dir}/bootstrap/{{id}}_bs_*.final.txt".format(dir = config["output"]["demography"])
+    shell:
+        "python {params.script} --input {input.txt} --output {output.pdf} --bootstrap {params.txt_bs}"
+
+rule pdfunite:
+    input:
+        pdfs = expand("{dir}/bootstrap/{{id}}.pdf".format(dir = config["output"]["demography"]), id = unique_id)
+    output:
+        pdf = "{dir}/bootstrap/msmc2_bs_leopardus.pdf".format(dir = config["output"]["demography"])
+    shell:
+        "pdfunite {input.pdfs} {output.pdf}"
+
