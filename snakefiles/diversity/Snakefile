@@ -11,7 +11,7 @@ import skbio
 import shutil
 
 ### Configuration
-configfile: "config_Lge-1.yaml"
+configfile: "config_mLynCan4.pri.v2.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -55,7 +55,7 @@ rule all:
         #expand("{dir}/pairwise_pi/fragments/{{gf}}.nwk".format(dir = config["output"]["fragments_dir"]), gf = unique_gf),
         #"{dir}/pairwise_pi/all_NJ.nwk".format(dir = config["output"]["fragments_dir"]),
         #"{dir}/pairwise_pi/average_pairwise_pi.nwk".format(dir = config["output"]["fragments_dir"]),
-        "{dir}/leopardus_heterozygosity.txt".format(dir = config["output"]["heterozygosity"]),
+#        "{dir}/leopardus_heterozygosity.txt".format(dir = config["output"]["heterozygosity"]),
         expand("{dir}/{{id}}.summary.txt".format(dir = config["output"]["roh"]), id = unique_id),
         "{dir}/figure_id.done".format(dir = config["output"]["demography"]),
         #expand("{dir}/bootstrap/{{id}}_bs_20.final.txt".format(dir = config["output"]["demography"]), id = unique_id),
@@ -288,9 +288,7 @@ rule msmc2:
         msmc2 = config["msmc2"],
         prefix = "{dir}/{{id}}".format(dir = config["output"]["demography"])
     shell:
-        "{params.msmc2} --nrThreads {threads} -o {params.prefix} {input.txt}"
-
-#rep = [str(i) for i in range(1,21)]
+        "{params.msmc2} --nrThreads {threads} -p 1*2+20*1+1*2+1*3 -o {params.prefix} {input.txt}"
 
 rule multihetsep_bs:
     input:
@@ -316,7 +314,7 @@ rule msmc2_bs:
         msmc2 = config["msmc2"],
         prefix = "{dir}/bootstrap/{{id}}_bs_$i".format(dir = config["output"]["demography"])
     shell:
-        "for i in {{1..20}}; do {params.msmc2} --nrThreads {threads} -o {params.prefix} {params.prefix}/bootstrap*.txt; done"
+        "for i in {{1..20}}; do {params.msmc2} --nrThreads {threads} -p 1*2+20*1+1*2+1*3 -o {params.prefix} {params.prefix}/bootstrap*.txt; done"
 
 rule unique_id2figure_id_msmc2:
     input:

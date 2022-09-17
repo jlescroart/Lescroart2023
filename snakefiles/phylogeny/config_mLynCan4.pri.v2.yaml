@@ -19,3 +19,7 @@ outgroup: "PumCon1.0"
 bin:
     astral: /media/labgenoma4/DATAPART4/jonasl/bin/ASTRAL/Astral.5.7.8/astral.5.7.8.jar
     phyutility: /media/labgenoma4/DATAPART4/jonasl/bin/phyutility2.2.6/phyutility.jar
+
+scripts:
+    fasta2phylip: /media/labgenoma4/DATAPART4/jonasl/scripts/fasta2phylip.py
+    generate_ctlMCMC: /media/labgenoma4/DATAPART4/jonasl/scripts/generate_ctlMCMC.py

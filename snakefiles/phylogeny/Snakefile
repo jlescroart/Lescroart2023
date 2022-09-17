@@ -49,7 +49,8 @@ rule all:
         "{dir}/astral_raxml.nwk".format(dir = config["output"]),
         #"{dir}/astral_NJ.nwk".format(dir = config["output"])
         "{dir}/phyutility/leaf_stability_index_raxml.txt".format(dir = config["output"]),
-        expand("{dir}/phyutility/baf_{{id}}_raxml.tre".format(dir = config["output"]), id = figure_id)
+        expand("{dir}/phyutility/baf_{{id}}_raxml.tre".format(dir = config["output"]), id = figure_id),
+        expand("{dir}/mcmctree/{{gf}}.tre".format(dir = config["output"]), gf = unique_gf)
 
 rule raxml:
     input:
@@ -171,6 +172,54 @@ rule baf:
     shell:
         "java -jar {params.phyutility} -lm -in {input.nwk} -tree {input.tre} -out {output.tre} -names {params.figure_id}"
 
+#mcmctree
+rule mcmc_phy:
+    input:
+        maf = "{dir}/{{gf}}.fasta".format(dir = config["input"]["fragments_dir"])
+    output:
+        phy = "{dir}/phylip/{{gf}}.phy".format(dir = config["output"])
+    params:
+        script = config["scripts"]["fasta2phylip"]
+    shell:
+        "python {params.script} --input {input.maf} --output {output.phy}"
+
+rule mcmc_topology:
+    input:
+        bestTree = "{dir}/raxml/RAxML_bestTree.{{gf}}".format(dir = config["output"])
+    output:
+        txt = "{dir}/mcmc_topology/{{gf}}.txt".format(dir = config["output"])
+    shell:
+        """
+        nw_stats -f l {input.bestTree} | awk '{{print $3" 1"}}' > {output.txt} && nw_topology {input.bestTree} | nw_order - >> {output.txt}
+        """
+
+rule mcmc_ctl:
+    input:
+        phy = "{dir}/phylip/{{gf}}.phy".format(dir = config["output"]),
+        txt = "{dir}/mcmc_topology/{{gf}}.txt".format(dir = config["output"])
+    output:
+        ctl = "{dir}/mcmctree/{{gf}}.ctl".format(dir = config["output"])
+    params:
+        script = config["scripts"]["generate_ctlMCMC"]
+    shell:
+        "python {params.script} --phy {input.phy} --nwk {input.txt} --ctl {output.ctl}"
+
+rule mcmctree: #might be optimized with a snakemake shadow directory
+    input:
+        ctl = "{dir}/mcmctree/{{gf}}.ctl".format(dir = config["output"])
+    output:
+        tre = "{dir}/mcmctree/{{gf}}.tre".format(dir = config["output"]),
+        out = temp("{dir}/mcmctree/{{gf}}_out.txt".format(dir = config["output"])),
+        mcmc = temp("{dir}/mcmctree/{{gf}}_mcmc.txt".format(dir = config["output"]))
+    params:
+        dir = "{dir}/mcmctree/{{gf}}".format(dir = config["output"]),
+        ctl = config["output"] + "/mcmctree/" + ("HHHH").join("{gf}".split(":")) + ".ctl"
+    run:
+        controlfile = input.ctl.split("/")[-1]
+        controlfile = ("\:").join(controlfile.split(":"))
+        shell("mkdir -p {params.dir} && cd {params.dir} && mcmctree ../"+controlfile+" && mv FigTree.tre {output.tre} && cd .. && rm -r {params.dir}")
+
+#neighorjoing: produces very bad results, use results NJ results from diversity pipeline instead
 rule muscle:
     input:
         maf = "{dir}/{{gf}}.fasta".format(dir = config["input"]["fragments_dir"])

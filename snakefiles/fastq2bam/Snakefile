@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 ### Configuration
-configfile: "config_Lge-1.yaml"
+configfile: "config_felCat9.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -35,9 +35,9 @@ def get_fq(some_id, read = 12):
 ### Variables
 metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python", encoding="latin-1").set_index("unique_id", drop = False)
 unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
-#print(unique_id)
-unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
-unique_id.remove("bLge-252")
+
+for id in config["exclude"]:
+    unique_id.remove(id)
 
 #unique_id = ["OGE-3"] # To test with 1 individual
 
@@ -92,7 +92,7 @@ rule trim:
         libr = config["trim"]["libr"],
         summary = config["output"]["bam"] + "/trim/" + "{id}_trim_summary.txt",
         avgqual = config["trim"]["avgqual"],
-        minlen = lambda wildcards: metadata["read_length"].loc[wildcards.id]
+        minlen = lambda wildcards: int(metadata["read_length"].loc[wildcards.id])
     shell:
         "java -jar {params.jar} PE -threads {threads} -summary {params.summary} " +
         "{input.fq1} {input.fq2} {output.fq1_pe} {output.fq1_se} {output.fq2_pe} {output.fq2_se} " +

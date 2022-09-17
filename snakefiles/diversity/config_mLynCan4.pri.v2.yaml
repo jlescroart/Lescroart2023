@@ -38,4 +38,5 @@ scripts:
     bamCaller: /media/labgenoma4/DATAPART4/jonasl/bin/msmc-tools/bamCaller.py
     snpable: /media/labgenoma4/DATAPART4/jonasl/scripts/snpable.sh
     multihetsep: /media/labgenoma4/DATAPART4/jonasl/bin/msmc-tools/generate_multihetsep.py
-
+    multihetsep_bs: /media/labgenoma4/DATAPART4/jonasl/bin/msmc-tools/multihetsep_bootstrap.py
+    msmc2_plot: /media/labgenoma4/DATAPART4/jonasl/scripts/msmc2_plot_bs.py
