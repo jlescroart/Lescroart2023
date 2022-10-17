@@ -1,6 +1,7 @@
 ### Snakefile for phylogeny pipeline, with associated file config.yaml
 ### Load associated environment with $ conda activate phylogeny
 ### Author Jonas Lescroart
+### To reduce DAG complexity, run with: $ for i in {1..25}; do snakemake -p --cores 10 --batch find_mcmctree=$i/25; done
 
 ### Packages
 import pandas as pd
@@ -27,8 +28,8 @@ unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
 unique_id.remove("bLge-252")
 
 # Working with a pruned sample set that contains only one sample per taxon
-#excluded_id = ["LPA-6", "LP339", "LCO-3", "LTI-32454", "LTI-6", "LTI-13", "bLge-252"]
-#unique_id = [id for id in unique_id if id not in excluded_id]
+excluded_id = ["LPA-6", "LP339", "LCO-3", "LTI-32454", "LTI-6", "LTI-13", "bLge-252"]
+unique_id = [id for id in unique_id if id not in excluded_id]
 
 figure_id = [metadata.loc[id]["figure_id"] for id in unique_id]
 
@@ -38,8 +39,6 @@ unique_gf = [strip_ext(gf) for gf in genomic_fragments["file"].astype(str).tolis
 ### Rules
 rule all:
     input:
-        #expand("{dir}/raxml/RAxML_bestTree.{{gf}}".format(dir = config["output"]), gf = unique_gf),
-        #expand("{dir}/muscle/{{gf}}.tmp.nwk".format(dir = config["output"]), gf = unique_gf),
         "{dir}/unique_raxml_topologies_count.nwk".format(dir = config["output"]),
         #"{dir}/unique_NJ_topologies_count.nwk".format(dir = config["output"]),
         "{dir}/majority_consensus_raxml.tre".format(dir = config["output"]),
@@ -50,7 +49,7 @@ rule all:
         #"{dir}/astral_NJ.nwk".format(dir = config["output"])
         "{dir}/phyutility/leaf_stability_index_raxml.txt".format(dir = config["output"]),
         expand("{dir}/phyutility/baf_{{id}}_raxml.tre".format(dir = config["output"]), id = figure_id),
-        expand("{dir}/mcmctree/{{gf}}.tre".format(dir = config["output"]), gf = unique_gf)
+        "{dir}/greedy_consensus_mcmctree.tre".format(dir = config["output"])
 
 rule raxml:
     input:
@@ -69,17 +68,7 @@ rule raxml:
         "rm {params.outdir}/RAxML_result.{params.tag} && " +
         "rm {params.outdir}/RAxML_parsimonyTree.{params.tag}"
 
-#rule filenames:
-#    input:
-#        bestTree = expand("{dir}/raxml/RAxML_bestTree.{{gf}}".format(dir = config["output"]), gf = unique_gf)
-#    output:
-#        txt = "{dir}/filenames.txt".format(dir = config["output"])
-#    params:
-#        dir = "{dir}/raxml/".format(dir = config["output"])
-#    shell:
-#        "find {params.dir} -type f -name 'RAxML_bestTree.*' > {output.txt}"
-
-rule cat_raxml:
+rule find_raxml:
     input:
         bestTree = expand("{dir}/raxml/RAxML_bestTree.{{gf}}".format(dir = config["output"]), gf = unique_gf)
     output:
@@ -88,7 +77,6 @@ rule cat_raxml:
         dir = "{dir}/raxml".format(dir = config["output"])
     shell:
         "find {params.dir} -type f -name 'RAxML_bestTree.*' | xargs cat > {output.nwk}"
-        #"cat {params.dir}/RAxML_bestTree.* > {output.nwk}"
 
 rule unique_id2figure_id_raxml:
     input:
@@ -124,7 +112,7 @@ rule sumtrees_raxml: # From DendroPy package
     output:
         tre = "{dir}/majority_consensus_raxml.tre".format(dir = config["output"])
     params:
-        outgroup = "Puma_concolor" # move to config file and add sumtrees functionality for multiple outgroups AND: use figure_id not unique_id
+        outgroup = metadata["figure_id"][config["outgroup"]]
     shell:
         "sumtrees.py --rooted --root-target-at-outgroup {params.outgroup} --summary-target consensus --min-clade-freq 0.0 -o {output.tre} {input.nwk}"
 
@@ -134,7 +122,7 @@ rule sumtrees_mcct_raxml:
     output:
         tre = "{dir}/mcct_raxml.tre".format(dir = config["output"])
     params:
-        outgroup = "Puma_concolor" # move to config file and add sumtrees functionality for multiple outgroups AND: use figure_id not unique_id
+        outgroup = metadata["figure_id"][config["outgroup"]]
     shell:
         "sumtrees.py --rooted --root-target-at-outgroup {params.outgroup} --summary-target mcct -o {output.tre} {input.nwk}"
 
@@ -144,7 +132,7 @@ rule astral_raxml:
     output:
         nwk = "{dir}/astral_raxml.nwk".format(dir = config["output"])
     params:
-        outgroup = "Puma_concolor",
+        outgroup = metadata["figure_id"][config["outgroup"]],
         astral = config["bin"]["astral"]
     shell:
         "java -jar {params.astral} --outgroup {params.outgroup}  -i {input.nwk} -o {output.nwk}"
@@ -177,7 +165,7 @@ rule mcmc_phy:
     input:
         maf = "{dir}/{{gf}}.fasta".format(dir = config["input"]["fragments_dir"])
     output:
-        phy = "{dir}/phylip/{{gf}}.phy".format(dir = config["output"])
+        phy = temp("{dir}/phylip/{{gf}}.phy".format(dir = config["output"]))
     params:
         script = config["scripts"]["fasta2phylip"]
     shell:
@@ -187,7 +175,7 @@ rule mcmc_topology:
     input:
         bestTree = "{dir}/raxml/RAxML_bestTree.{{gf}}".format(dir = config["output"])
     output:
-        txt = "{dir}/mcmc_topology/{{gf}}.txt".format(dir = config["output"])
+        txt = temp("{dir}/mcmc_topology/{{gf}}.txt".format(dir = config["output"]))
     shell:
         """
         nw_stats -f l {input.bestTree} | awk '{{print $3" 1"}}' > {output.txt} && nw_topology {input.bestTree} | nw_order - >> {output.txt}
@@ -198,7 +186,7 @@ rule mcmc_ctl:
         phy = "{dir}/phylip/{{gf}}.phy".format(dir = config["output"]),
         txt = "{dir}/mcmc_topology/{{gf}}.txt".format(dir = config["output"])
     output:
-        ctl = "{dir}/mcmctree/{{gf}}.ctl".format(dir = config["output"])
+        ctl = temp("{dir}/mcmctree/{{gf}}.ctl".format(dir = config["output"]))
     params:
         script = config["scripts"]["generate_ctlMCMC"]
     shell:
@@ -206,9 +194,11 @@ rule mcmc_ctl:
 
 rule mcmctree: #might be optimized with a snakemake shadow directory
     input:
-        ctl = "{dir}/mcmctree/{{gf}}.ctl".format(dir = config["output"])
+        ctl = "{dir}/mcmctree/{{gf}}.ctl".format(dir = config["output"]),
+        phy = "{dir}/phylip/{{gf}}.phy".format(dir = config["output"]),
+        txt = "{dir}/mcmc_topology/{{gf}}.txt".format(dir = config["output"])
     output:
-        tre = "{dir}/mcmctree/{{gf}}.tre".format(dir = config["output"]),
+        tre = temp("{dir}/mcmctree/{{gf}}.tre".format(dir = config["output"])),
         out = temp("{dir}/mcmctree/{{gf}}_out.txt".format(dir = config["output"])),
         mcmc = temp("{dir}/mcmctree/{{gf}}_mcmc.txt".format(dir = config["output"]))
     params:
@@ -218,6 +208,47 @@ rule mcmctree: #might be optimized with a snakemake shadow directory
         controlfile = input.ctl.split("/")[-1]
         controlfile = ("\:").join(controlfile.split(":"))
         shell("mkdir -p {params.dir} && cd {params.dir} && mcmctree ../"+controlfile+" && mv FigTree.tre {output.tre} && cd .. && rm -r {params.dir}")
+
+rule nexus:
+    input:
+        tre = "{dir}/mcmctree/{{gf}}.tre".format(dir = config["output"])
+    output:
+        nex = "{dir}/mcmctree/{{gf}}.nex".format(dir = config["output"])
+    shell:
+        "sed 's/UTREE/TREE/g' {input.tre} > {output.nex}"
+
+rule find_mcmctree:
+    input:
+        nex = expand("{dir}/mcmctree/{{gf}}.nex".format(dir = config["output"]), gf = unique_gf)
+    output:
+        nex = temp("{dir}/all_mcmctree_unique_id.nex".format(dir = config["output"]))
+    params:
+        dir = "{dir}/mcmctree".format(dir = config["output"])
+    shell:
+        "find {params.dir} -type f -name '*.nex' | xargs cat > {output.nex}"
+
+rule unique_id2figure_id_mcmctree:
+    input:
+        nex = "{dir}/all_mcmctree_unique_id.nex".format(dir = config["output"])
+    output:
+        nex = "{dir}/all_mcmctree.nex".format(dir = config["output"])
+    run:
+        with open(output.nex, "w") as out:
+            for line in shell("cat {input.nex}", iterable = True):
+                for id in unique_id:
+                    line = re.sub(id, metadata["figure_id"][id], line)
+                out.write(line + "\n")
+
+rule sumtrees_mcmctree:
+    input:
+        nex = "{dir}/all_mcmctree.nex".format(dir = config["output"])
+    output:
+        tre = "{dir}/greedy_consensus_mcmctree.tre".format(dir = config["output"])
+    params:
+        outgroup = metadata["figure_id"][config["outgroup"]]
+    shell:
+        "sumtrees.py -i nexus --root-target-at-outgroup {params.outgroup} --min-clade-freq=0.0 --summarize-node-ages --set-edges=mean-age -o {output.tre} {input.nex}"
+
 
 #neighorjoing: produces very bad results, use results NJ results from diversity pipeline instead
 rule muscle:

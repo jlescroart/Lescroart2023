@@ -9,10 +9,10 @@ ref:
     file: /media/labgenoma4/DATAPART7/duda_grupo/references/mLynCan4.pri.v2/GCA_007474595.2_mLynCan4.pri.v2_genomic.fna.gz
 
 input:
-    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2/repeatmasked/100kb40/windows
-    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2/repeatmasked/100kb40/filenames_informative.txt
+    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2_pruned/repeatmasked/100kb40/windows
+    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2_pruned/repeatmasked/100kb40/filenames_informative.txt
 
-output: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/phylogeny_mLynCan4.pri.v2/repeatmasked/100kb40
+output: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/phylogeny_mLynCan4.pri.v2_pruned/repeatmasked/100kb40
 
 outgroup: "PumCon1.0"
 
