@@ -11,7 +11,7 @@ import skbio
 import shutil
 
 ### Configuration
-configfile: "config_mLynCan4.pri.v2.yaml"
+configfile: "config_Lge-1.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -57,9 +57,9 @@ rule all:
         #"{dir}/pairwise_pi/average_pairwise_pi.nwk".format(dir = config["output"]["fragments_dir"]),
 #        "{dir}/leopardus_heterozygosity.txt".format(dir = config["output"]["heterozygosity"]),
         expand("{dir}/{{id}}.summary.txt".format(dir = config["output"]["roh"]), id = unique_id),
-        "{dir}/figure_id.done".format(dir = config["output"]["demography"]),
+ #       "{dir}/figure_id.done".format(dir = config["output"]["demography"]),
         #expand("{dir}/bootstrap/{{id}}_bs_20.final.txt".format(dir = config["output"]["demography"]), id = unique_id),
-        "{dir}/bootstrap/msmc2_bs_leopardus.pdf".format(dir = config["output"]["demography"])
+        "{dir}/msmc2_bs_leopardus.pdf".format(dir = config["output"]["demography"])
 
 rule pairwise_pi:
     input:
@@ -146,7 +146,8 @@ rule angsd:
         bam = "{dir}/{{id}}.filtered.bam".format(dir = config["input"]["bam_dir"]), 
         fna = strip_ext(config["ref"]["file"]) + ".fna"
     output:
-        idx = "{dir}/{{id}}.saf.idx".format(dir = config["output"]["heterozygosity"])
+        idx = temp("{dir}/{{id}}.saf.idx".format(dir = config["output"]["heterozygosity"])),
+        gz = temp("{dir}/{{id}}.saf.pos.gz".format(dir = config["output"]["heterozygosity"]))
     threads: 4
     params:
         id = "{dir}/{{id}}".format(dir = config["output"]["heterozygosity"]),
@@ -160,7 +161,7 @@ rule angsd_realsfs:
     input:
         idx = "{dir}/{{id}}.saf.idx".format(dir = config["output"]["heterozygosity"])
     output:
-        ml = "{dir}/{{id}}.est.ml".format(dir = config["output"]["heterozygosity"])
+        ml = temp("{dir}/{{id}}.est.ml".format(dir = config["output"]["heterozygosity"]))
     threads: 3
     shell:
         "realSFS {input.idx} -nSites 200000 > {output.ml}"
@@ -276,19 +277,20 @@ rule multihetsep:
     shell:
         "python {params.script} --mask {input.ref_bed} --mask {input.sample_bed} {input.vcf} > {output.txt}"
 
-rule msmc2:
-    input:
-        txt = expand(config["output"]["demography"] + "/multihetsep/{{id}}_{chr}_multihetsep.txt", chr = autosomes)
-    output:
-        final_txt = "{dir}/{{id}}.final.txt".format(dir = config["output"]["demography"]),
-        loop_txt = temp("{dir}/{{id}}.loop.txt".format(dir = config["output"]["demography"])),
-        log = "{dir}/{{id}}.log".format(dir = config["output"]["demography"])
-    threads: 1
-    params:
-        msmc2 = config["msmc2"],
-        prefix = "{dir}/{{id}}".format(dir = config["output"]["demography"])
-    shell:
-        "{params.msmc2} --nrThreads {threads} -p 1*2+20*1+1*2+1*3 -o {params.prefix} {input.txt}"
+# This rule may be useless now that I switched to a consensus run from the bootstraps
+#rule msmc2:
+#    input:
+#        txt = expand(config["output"]["demography"] + "/multihetsep/{{id}}_{chr}_multihetsep.txt", chr = autosomes)
+#    output:
+#        final_txt = "{dir}/{{id}}.final.txt".format(dir = config["output"]["demography"]),
+#        loop_txt = temp("{dir}/{{id}}.loop.txt".format(dir = config["output"]["demography"])),
+#        log = "{dir}/{{id}}.log".format(dir = config["output"]["demography"])
+#    threads: 1
+#    params:
+#        msmc2 = config["msmc2"],
+#        prefix = "{dir}/{{id}}".format(dir = config["output"]["demography"])
+#    shell:
+#        "{params.msmc2} --nrThreads {threads} -p 1*2+20*1+1*2+1*3 -o {params.prefix} {input.txt}"
 
 rule multihetsep_bs:
     input:
@@ -316,33 +318,45 @@ rule msmc2_bs:
     shell:
         "for i in {{1..20}}; do {params.msmc2} --nrThreads {threads} -p 1*2+20*1+1*2+1*3 -o {params.prefix} {params.prefix}/bootstrap*.txt; done"
 
-rule unique_id2figure_id_msmc2:
+rule msmc2_consensus:
     input:
-        txt = expand("{dir}/{{id}}.final.txt".format(dir = config["output"]["demography"]), id = unique_id),
-        log = expand("{dir}/{{id}}.log".format(dir = config["output"]["demography"]), id = unique_id)
-    output: touch("{dir}/figure_id.done".format(dir = config["output"]["demography"]))
-    run:
-       for id in unique_id:
-           shutil.copyfile(config["output"]["demography"] + '/' + id + ".final.txt", config["output"]["demography"] + '/' + metadata.loc[id]["figure_id"] + ".final.txt")
-           shutil.copyfile(config["output"]["demography"] + '/' + id + ".log", config["output"]["demography"] + '/' + metadata.loc[id]["figure_id"] + ".log")
+        txt_bs = "{dir}/bootstrap/{{id}}_bs_20.final.txt".format(dir = config["output"]["demography"])
+    output:
+        txt = "{dir}/{{id}}.consensus.final.txt".format(dir = config["output"]["demography"])
+    params:
+        script = config["scripts"]["msmc2_consensus"],
+        txt_bs = "{dir}/bootstrap/{{id}}_bs_*.final.txt".format(dir = config["output"]["demography"])
+    shell:
+        "python {params.script} --input {params.txt_bs} --output {output.txt}"
+
+# This is not quite right, it produces copies of the consensus files whith figure IDs but the subsequent rules necessarily continue with sample IDs. Leave out?
+#rule unique_id2figure_id_msmc2:
+#    input:
+#        txt = expand("{dir}/bootstrap/{{id}}.consensus.final.txt".format(dir = config["output"]["demography"]), id = unique_id)
+#        log = expand("{dir}/{{id}}.log".format(dir = config["output"]["demography"]), id = unique_id)
+#    output: touch("{dir}/figure_id.done".format(dir = config["output"]["demography"]))
+#    run:
+#       for id in unique_id:
+#           shutil.copyfile(config["output"]["demography"] + '/bootstrap/' + id + ".consensus.final.txt", config["output"]["demography"] + '/bootstrap/' + metadata.loc[id]["figure_id"] + ".consensus.final.txt")
+#           shutil.copyfile(config["output"]["demography"] + '/' + id + ".log", config["output"]["demography"] + '/' + metadata.loc[id]["figure_id"] + ".log")
 
 rule msmc2_plot:
     input:
-        txt = "{dir}/{{id}}.final.txt".format(dir = config["output"]["demography"]),
+        txt = "{dir}/{{id}}.consensus.final.txt".format(dir = config["output"]["demography"]),
         txt_bs = "{dir}/bootstrap/{{id}}_bs_20.final.txt".format(dir = config["output"]["demography"])
     output:
-        pdf = "{dir}/bootstrap/{{id}}.pdf".format(dir = config["output"]["demography"])
+        pdf = temp("{dir}/{{id}}.pdf".format(dir = config["output"]["demography"]))
     params:
         script = config["scripts"]["msmc2_plot"],
         txt_bs = "{dir}/bootstrap/{{id}}_bs_*.final.txt".format(dir = config["output"]["demography"])
     shell:
-        "python {params.script} --input {input.txt} --output {output.pdf} --bootstrap {params.txt_bs}"
+        "python {params.script} --input {input.txt} --output {output.pdf} --gen 3.8 --bootstrap {params.txt_bs}"
 
 rule pdfunite:
     input:
-        pdfs = expand("{dir}/bootstrap/{{id}}.pdf".format(dir = config["output"]["demography"]), id = unique_id)
+        pdfs = expand("{dir}/{{id}}.pdf".format(dir = config["output"]["demography"]), id = unique_id)
     output:
-        pdf = "{dir}/bootstrap/msmc2_bs_leopardus.pdf".format(dir = config["output"]["demography"])
+        pdf = "{dir}/msmc2_bs_leopardus.pdf".format(dir = config["output"]["demography"])
     shell:
         "pdfunite {input.pdfs} {output.pdf}"
 

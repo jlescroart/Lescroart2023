@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 ### Configuration
-configfile: "config_mLynCan4.pri.v2.yaml"
+configfile: "config_Lge-1.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -24,8 +24,8 @@ def strip_ext(file_str):
 metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python").set_index("unique_id", drop = False)
 unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
 
-unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
-unique_id.remove("bLge-252")
+for id in config["exclude"]:
+    unique_id.remove(id)
 
 # Working with a pruned sample set that contains only one sample per taxon
 excluded_id = ["LPA-6", "LP339", "LCO-3", "LTI-32454", "LTI-6", "LTI-13", "bLge-252"]

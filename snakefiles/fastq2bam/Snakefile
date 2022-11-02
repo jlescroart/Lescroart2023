@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 ### Configuration
-configfile: "config_felCat9.yaml"
+configfile: "config_Lge-1.yaml"
 
 ### Functions
 def strip_ext(file_str): 

@@ -9,8 +9,8 @@ ref:
     file: /media/labgenoma4/DATAPART7/duda_grupo/references/Lge_Assembly_v1/Lge-1_final.fna.gz
 
 input:
-    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1/repeatmasked/5kb40/windows
-    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1/repeatmasked/5kb40/filenames_informative.txt
+    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1/repeatmasked/100kb40/windows
+    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1/repeatmasked/100kb40/filenames_informative.txt
     bam_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/bam_Lge-1
     auto: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/diversity_Lge-1/roh/autosomes.txt # This file needs to be manually created, in the format acceptable to ROHan and for use in MSMC2
 
@@ -40,3 +40,4 @@ scripts:
     multihetsep: /media/labgenoma4/DATAPART4/jonasl/bin/msmc-tools/generate_multihetsep.py
     multihetsep_bs: /media/labgenoma4/DATAPART4/jonasl/bin/msmc-tools/multihetsep_bootstrap.py
     msmc2_plot: /media/labgenoma4/DATAPART4/jonasl/scripts/msmc2_plot_bs.py
+    msmc2_consensus: /media/labgenoma4/DATAPART4/jonasl/scripts/msmc2_consensus.py

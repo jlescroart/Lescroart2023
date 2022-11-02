@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 ### Configuration
-configfile: "config_mLynCan4.pri.v2.yaml"
+configfile: "config_Lge-1.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -33,20 +33,16 @@ for chr in ref_fai["chromosome"]:
     if config["ref"]["chromosome_tag"] in chr:
         unique_chr.append(chr)
 
-unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
-unique_id.remove("bLge-252")
-
-# Working with a pruned sample set that contains only one sample per taxon
-excluded_id = ["LPA-6", "LP339", "LCO-3", "LTI-32454", "LTI-6", "LTI-13"]
-unique_id = [id for id in unique_id if id not in excluded_id]
+for id in config["exclude"]:
+    unique_id.remove(id)
 
 ### Rules
 rule all:
     input:
-        #expand("{dir}/unmasked/diagnose_fasta/{{id}}.info".format(dir = config["output"]["fasta"]), id = unique_id),
-        expand("{dir}/repeatmasked/diagnose_fasta/{{id}}.info".format(dir = config["output"]["fasta"]), id = unique_id),
-        #"{dir}/unmasked/{size}kb{cutoff}/summary_{cutoff}.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"]),
-        "{dir}/repeatmasked/{size}kb{cutoff}/summary_{cutoff}.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"])
+        expand("{dir}/unmasked/diagnose_fasta/{{id}}.info".format(dir = config["output"]["fasta"]), id = unique_id),
+        #expand("{dir}/repeatmasked/diagnose_fasta/{{id}}.info".format(dir = config["output"]["fasta"]), id = unique_id),
+        "{dir}/unmasked/{size}kb{cutoff}/summary_{cutoff}.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"]),
+        #"{dir}/repeatmasked/{size}kb{cutoff}/summary_{cutoff}.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"])
 
 rule idxstats:
     input:

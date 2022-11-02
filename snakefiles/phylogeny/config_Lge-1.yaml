@@ -2,6 +2,7 @@
 # Load environment from within jonasl environment with $ conda activate phylogeny
 
 metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2021APR10.tsv
+exclude: ["mLynCan4", "bLge-252", 'LTI-6', 'LCO-3', 'LTI-13', 'LTI-32454', 'LP339', 'LPA-6']
 
 ref:
     species: "Leopardus geoffroyi"
@@ -9,10 +10,10 @@ ref:
     file: /media/labgenoma4/DATAPART7/duda_grupo/references/Lge_Assembly_v1/Lge-1_final.fna.gz
 
 input:
-    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1/unmasked/100kb40/windows
-    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1/unmasked/100kb40/filenames_informative.txt
+    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1_pruned/unmasked/100kb40/windows
+    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1_pruned/unmasked/100kb40/filenames_informative.txt
 
-output: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/phylogeny_Lge-1/unmasked/100kb40
+output: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/phylogeny_Lge-1_pruned/unmasked/100kb40
 
 outgroup: "PumCon1.0"
 

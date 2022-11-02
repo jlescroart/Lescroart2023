@@ -2,6 +2,7 @@
 # Load environment from within jonasl environment with $ conda activate bam2fasta
 
 metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2021APR10.tsv
+exclude: ["mLynCan4", "bLge-252", 'LTI-6', 'LCO-3', 'LTI-13', 'LTI-32454', 'LP339', 'LPA-6']
 
 ref:
     species: "Lynx Canadensis"

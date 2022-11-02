@@ -6,12 +6,16 @@ Script to plot MSMC2 output with bootstraps.
 Input files are a *.final.txt file for the main sample
 and additional *.final.txt files for the bootstrap replicates.
 
+The mutation rate is expressed in mutations per site per generation
+and the default 0.86e-8 is taken from Wang, ..., Hahn et al. (2022) in domestic cat.
+The default generation time (3.8y) is taken from that same study.
+
 USAGE
 python msmc2_plot_bs.py
     --input /fullpath/SAMPLE.final.txt
     --output /fullpath/SAMPLE.pdf
     --bootstrap /fullpath/*.final.txt
-    --mu [mutation rate, default 1e-8]
+    --mu [mutation rate, default 0.86e-8]
     --gen [generation time, default 1]
 
 Author: Jonas Lescroart
@@ -28,8 +32,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--input', help="Absolute path to *.final.txt file", type= str)
 parser.add_argument('--output', help="Absolute path to *.pdf file", type= str)
 parser.add_argument('--bootstrap', help="Absolute path to bootstrap iteration *.final.txt files", nargs='+', type= str)
-parser.add_argument('--mu', help="Mutation rate", default=1e-8, type=float)
-parser.add_argument('--gen', help="Generation time. Use default (1) to display time in generations instead of years", default=1, type=int)
+parser.add_argument('--mu', help="Mutation rate", default=0.86e-8, type=float)
+parser.add_argument('--gen', help="Generation time. Use default (1) to display time in generations instead of years", default=1, type=float)
 args = parser.parse_args()
 
 #assert obligatory arguments and create variables
@@ -65,12 +69,12 @@ label = sample_id)
 
 #plot other elements
 if args.gen == 1:
-    plt.xlabel("Generations (μ = " + str(args.mu) + ")")
+    plt.xlabel("Generations (μ = " + str(args.mu) + " mutations/bp/gen)")
     plt.xlim(left = 1e3, right = 1e6)
 else:
-    plt.xlabel("Years before present (μ = " + str(args.mu) + ")")
+    plt.xlabel("Years before present (μ = " + str(args.mu) + " mutations/bp/gen; generation time = " + str(args.gen)  + "y)")
     plt.xlim(left = 1e3)
-plt.ylim(0,40e4)
+plt.ylim(0,50e4)
 plt.ylabel("Effective population size (Ne)")
 plt.gca().set_xscale("log")
 plt.legend()
