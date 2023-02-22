@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 ### Configuration
-configfile: "config_mLynCan4.pri.v2.yaml"
+configfile: "config_Lge-1.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -24,16 +24,25 @@ def strip_ext(file_str):
 
 ### Variables
 metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python", encoding="latin-1").set_index("unique_id", drop = False)
-unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
 
-ref_fai = pd.read_csv("{ref}.fna.fai".format(ref = strip_ext(config["ref"]["file"])), sep = "\t", engine = "python", names = ["chromosome", "2", "3", "4", "5"]).set_index("chromosome", drop = False)
+unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
+for id in config["exclude"]:
+    unique_id.remove(id)
+
 unique_chr = []
+ref_fai = pd.read_csv("{ref}.fna.fai".format(ref = strip_ext(config["ref"]["file"])), sep = "\t", engine = "python", names = ["chromosome", "2", "3", "4", "5"]).set_index("chromosome", drop = False)
 for chr in ref_fai["chromosome"]:
     if config["ref"]["chromosome_tag"] in chr:
         unique_chr.append(chr)
+if config["ref"]["MT"] in unique_chr:
+    unique_chr.remove(config["ref"]["MT"])
+autosomes = unique_chr.copy()
+for chr in config["ref"]["sex_chr"]:
+    if chr in autosomes:
+        autosomes.remove(chr)
+del chr
 
-unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
-unique_id.remove("bLge-252")
+#for testing
 
 ### Rules
 rule all:
@@ -41,8 +50,10 @@ rule all:
         #"{dir}/bam_list.txt".format(dir = config["output"]["vcf"]),
         #"{dir}/all.{ref}.bcf".format(dir = config["output"]["vcf"], ref = config["ref"]["assembly"]),
         #"{dir}/total_depth.txt".format(dir = config["output"]["vcf"])
-        #expand("{dir}/{{id}}.vcf.gz".format(dir = config["output"]["vcf"]), id = unique_id)
-        "{dir}/leopardus_vcf.html".format(dir = config["output"]["vcf"]),
+        #expand("{dir}/{{chr}}.vcf.gz".format(dir = config["output"]["vcf"]), chr = unique_chr),
+        "{dir}/leopardus_unmasked.html".format(dir = config["output"]["vcf"]),
+        "{dir}/leopardus_autosomal.html".format(dir = config["output"]["vcf"]),
+        "{dir}/leopardus_repeatmasked.html".format(dir = config["output"]["vcf"]),
         "{dir}/plink2/leopardus_pca.svg".format(dir = config["output"]["vcf"])
 
 rule ref_gunzip:
@@ -52,6 +63,22 @@ rule ref_gunzip:
         ref_fna = "{ref}.fna".format(ref = strip_ext(config["ref"]["file"]))
     shell:
         "gunzip -k {input.ref_gz}"
+
+rule rmsk_gunzip:
+    input:
+        gz = config["ref"]["repeatmasker_out"]
+    output:
+        rmsk = temp(strip_ext(config["ref"]["repeatmasker_out"]))
+    shell:
+        "gunzip -c {input.gz} > {output.rmsk}"
+
+rule rmsk2bed:
+    input:
+        rmsk = strip_ext(config["ref"]["repeatmasker_out"])
+    output:
+        bed = strip_ext(config["ref"]["repeatmasker_out"]) + ".bed"
+    shell:
+        "rmsk2bed < {input.rmsk} | bedops --merge - > {output.bed}"
 
 rule gatk:
     input:
@@ -63,75 +90,144 @@ rule gatk:
 
 rule bcftools_mpileup:
     input:
-        bam = "{dir}/{{id}}.filtered.bam".format(dir = config["input"]["bam"]),
+        bam = expand("{dir}/{{id}}.filtered.bam".format(dir = config["input"]["bam"]), id = unique_id),
         ref_fna = "{ref}.fna".format(ref = strip_ext(config["ref"]["file"]))
     output:
-        vcf = "{dir}/{{id}}.vcf.gz".format(dir = config["output"]["vcf"])
+        vcf = temp("{dir}/{{chr}}.vcf.gz".format(dir = config["output"]["vcf"]))
+    params:
+        chr = "{chr}"
     shell:
-        "bcftools mpileup -a FORMAT/AD,FORMAT/DP --skip-indels --max-depth 50 --min-MQ 30 --min-BQ 20 -Ou -f {input.ref_fna} {input.bam} | bcftools call -f GQ -m --variants-only -Ou | bcftools +fill-tags -Oz -o {output.vcf}"
-# maybe add -t option to filter out the random scaffolds
-# adjust max-depth to sample-specific value like in bam2fasta, and add minimum depth 5
-# can also used a masked ref, maybe better? masked sites won't be called
-# indels, depth and quality are now checked in mpileup step but would be better to keep mpileup simple and instead apply 'bcftools filter' at the end of this rule
-# that way the amound of failed variants can be checked in the variantqc html (PASS or FAIL)
+        "bcftools mpileup -r {params.chr} --skip-indels --min-MQ 30 --min-BQ 20 -a FORMAT/DP -d 100 -Ou -f {input.ref_fna} {input.bam} | bcftools call -m --variants-only -Ou | bcftools annotate -x FORMAT/PL,^INFO/MQ -Ou | bcftools filter -e 'FORMAT/DP>40' -Ou | bcftools filter -e 'FORMAT/DP<5' -Oz -o {output.vcf}"
+# Instead of filtering during mpileup, annotate eg INFO/INDEL and then filter with INFO/INDEL=1 using --soft-filter. Then all excluded sites are visible in VariantQC report, and can be excluded in analyses with the PASS filter tag.
+# Can't find a way to adjust min- and max-depth to sample- and chr specific value, like I did in bam2fasta
+# bcftools filter can use --set-GTs . to set only failed samples to missing (.) rather than discarding the whole site across all samples
 
-rule indexfeaturefile1:
+rule indexfeaturefile:
     input:
-        vcf = "{dir}/{{id}}.vcf.gz".format(dir = config["output"]["vcf"])
+        vcf = "{dir}/{{chr}}.vcf.gz".format(dir = config["output"]["vcf"])
     output:
-        tbi = "{dir}/{{id}}.vcf.gz.tbi".format(dir = config["output"]["vcf"])
+        tbi = temp("{dir}/{{chr}}.vcf.gz.tbi".format(dir = config["output"]["vcf"]))
     shell:
         "gatk IndexFeatureFile --input {input.vcf} --output {output.tbi}"
-
-# include stats
-#bcftools stats --fasta-ref /media/labgenoma4/DATAPART7/duda_grupo/references/Lge_Assembly_v1/Lge-1_final.fna /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/vcf_Lge-1/398-wiedii.vcf.gz > 398-wiedii.vcf.stats
-# can be jammed in multiqc
 
 rule unique_id2figure_id:
     input:
         bam = expand("{dir}/{{id}}.filtered.bam".format(dir = config["input"]["bam"]), id = unique_id)
     output:
-        tsv = "{dir}/unique_id2figure_id.tsv".format(dir = config["output"]["vcf"]) # Make temp
+        tsv = temp("{dir}/unique_id2figure_id.tsv".format(dir = config["output"]["vcf"]))
     run:
         with open(output.tsv, "w") as out:
             for id in unique_id:
                 new_id = metadata.loc[id]["figure_id"]
                 out.write(config["input"]["bam"] + "/"  + id + ".filtered.bam\t" + new_id + "\n")
 
-rule bcftools_merge:
+rule reheader_fai:
     input:
-        vcf = expand("{dir}/{{id}}.vcf.gz".format(dir = config["output"]["vcf"]), id = unique_id),
-        tbi = expand("{dir}/{{id}}.vcf.gz.tbi".format(dir = config["output"]["vcf"]), id = unique_id),
+        fai = "{ref}.fna.fai".format(ref = strip_ext(config["ref"]["file"]))
+    output:
+        fai = temp("{dir}/reheader.fai".format(dir = config["output"]["vcf"]))
+    run:
+        outlines = []
+        with open(input.fai, "r") as infile:
+            inlines = infile.readlines()
+        for line in inlines:
+            for chr in autosomes:
+                if chr in line:
+                    outlines.append(line)
+            del chr
+        with open(output.fai, "w") as out:
+            out.writelines(outlines)
+
+rule bcftools_concat:
+    input:
+        vcf = expand("{dir}/{{chr}}.vcf.gz".format(dir = config["output"]["vcf"]), chr = unique_chr),
+        tbi = expand("{dir}/{{chr}}.vcf.gz.tbi".format(dir = config["output"]["vcf"]), chr = unique_chr),
+        fai = "{dir}/reheader.fai".format(dir = config["output"]["vcf"]),
         tsv = "{dir}/unique_id2figure_id.tsv".format(dir = config["output"]["vcf"])
     output:
-        vcf = "{dir}/leopardus.vcf.gz".format(dir = config["output"]["vcf"])
+        vcf = "{dir}/leopardus_unmasked.vcf.gz".format(dir = config["output"]["vcf"])
+    threads: 6
     shell:
-        "bcftools merge -Oz {input.vcf} | bcftools reheader -s {input.tsv} -o {output.vcf}"
-# bcftools reheader -s ~/sandbox/dsuite/new_id.txt leopardus.vcf.gz > leopardus_reheaded.vcf.gz
+        "bcftools concat --threads {threads} -Oz {input.vcf} | bcftools reheader -s {input.tsv} -o temp.vcf.gz && bcftools reheader --fai {input.fai} -o {output.vcf} temp.vcf.gz"
 
-use rule indexfeaturefile1 as indexfeaturefile2 with:
+use rule indexfeaturefile as indexfeaturefile_unmasked with:
     input:
-        vcf = "{dir}/leopardus.vcf.gz".format(dir = config["output"]["vcf"])
+        vcf = "{dir}/leopardus_unmasked.vcf.gz".format(dir = config["output"]["vcf"])
     output:
-        tbi = "{dir}/leopardus.vcf.gz.tbi".format(dir = config["output"]["vcf"])
+        tbi = "{dir}/leopardus_unmasked.vcf.gz.tbi".format(dir = config["output"]["vcf"])
+
+rule bcftools_mask:
+    input:
+        vcf = "{dir}/leopardus_unmasked.vcf.gz".format(dir = config["output"]["vcf"]),
+        tbi = "{dir}/leopardus_unmasked.vcf.gz.tbi".format(dir = config["output"]["vcf"]),
+        bed = strip_ext(config["ref"]["repeatmasker_out"]) + ".bed"
+    output:
+        vcf = "{dir}/leopardus_repeatmasked.vcf.gz".format(dir = config["output"]["vcf"])
+    threads: 6
+    shell:
+        "bcftools filter --threads {threads} -T ^{input.bed} -Oz -o {output.vcf} {input.vcf}"
+# Should be using bcftools filter --mask-file {input.bed} --soft-filter MASK -m +
+# But I'm stuck with bcftools <v1.15 in conda for now
+
+use rule indexfeaturefile as indexfeaturefile_masked with:
+    input:
+        vcf = "{dir}/leopardus_repeatmasked.vcf.gz".format(dir = config["output"]["vcf"])
+    output:
+        tbi = "{dir}/leopardus_repeatmasked.vcf.gz.tbi".format(dir = config["output"]["vcf"])
+
+rule bcftools_autosomal:
+    input:
+        vcf = "{dir}/leopardus_unmasked.vcf.gz".format(dir = config["output"]["vcf"]),
+        tbi = "{dir}/leopardus_unmasked.vcf.gz.tbi".format(dir = config["output"]["vcf"])
+    output:
+        vcf = "{dir}/leopardus_autosomal.vcf.gz".format(dir = config["output"]["vcf"])
+    threads: 6
+    params:
+        chr = ','.join(autosomes)
+    shell:
+        "bcftools filter --threads {threads} --regions {params.chr} -Oz -o {output.vcf} {input.vcf}"
+
+use rule indexfeaturefile as indexfeaturefile_autosomal with:
+    input:
+        vcf = "{dir}/leopardus_autosomal.vcf.gz".format(dir = config["output"]["vcf"])
+    output:
+        tbi = "{dir}/leopardus_autosomal.vcf.gz.tbi".format(dir = config["output"]["vcf"])
 
 rule variantqc:
     input:
-        vcf = "{dir}/leopardus.vcf.gz".format(dir = config["output"]["vcf"]),
-        tbi = "{dir}/leopardus.vcf.gz.tbi".format(dir = config["output"]["vcf"]),
+        vcf = "{dir}/leopardus_unmasked.vcf.gz".format(dir = config["output"]["vcf"]),
+        tbi = "{dir}/leopardus_unmasked.vcf.gz.tbi".format(dir = config["output"]["vcf"]),
         ref_fna = "{ref}.fna".format(ref = strip_ext(config["ref"]["file"])),
         dict = "{ref}.dict".format(ref = strip_ext(config["ref"]["file"]))
     output:
-        html = "{dir}/leopardus_vcf.html".format(dir = config["output"]["vcf"])
+        html = "{dir}/leopardus_unmasked.html".format(dir = config["output"]["vcf"])
     threads: 4
     params:
         jar = config["bin"]["variantqc"]
     shell:
         "java -jar {params.jar} VariantQC --threads {threads} -R {input.ref_fna} -V {input.vcf} -O {output.html}"
 
+use rule variantqc as variantqc_masked with:
+    input:
+        vcf = "{dir}/leopardus_repeatmasked.vcf.gz".format(dir = config["output"]["vcf"]),
+        tbi = "{dir}/leopardus_repeatmasked.vcf.gz.tbi".format(dir = config["output"]["vcf"]),
+        ref_fna = "{ref}.fna".format(ref = strip_ext(config["ref"]["file"])),
+        dict = "{ref}.dict".format(ref = strip_ext(config["ref"]["file"]))
+    output:
+        html = "{dir}/leopardus_repeatmasked.html".format(dir = config["output"]["vcf"])
+
+use rule variantqc as variantqc_autosomal with:
+    input:
+        vcf = "{dir}/leopardus_autosomal.vcf.gz".format(dir = config["output"]["vcf"]),
+        tbi = "{dir}/leopardus_autosomal.vcf.gz.tbi".format(dir = config["output"]["vcf"]),
+        ref_fna = "{ref}.fna".format(ref = strip_ext(config["ref"]["file"])),
+        dict = "{ref}.dict".format(ref = strip_ext(config["ref"]["file"]))
+    output:
+        html = "{dir}/leopardus_autosomal.html".format(dir = config["output"]["vcf"])
+
 rule keepfile:
     input:
-        tbi = "{dir}/leopardus.vcf.gz.tbi".format(dir = config["output"]["vcf"])
+        tbi = "{dir}/leopardus_repeatmasked.vcf.gz.tbi".format(dir = config["output"]["vcf"])
     output:
         tsv = "{dir}/plink2/keep.tsv".format(dir = config["output"]["vcf"])
     params:
@@ -140,7 +236,8 @@ rule keepfile:
     run:
         shell("mkdir -p {params.path}")
         include_id = unique_id
-        include_id.remove(params.outgroup) # Implement something to remove multiple outgroups given in config
+        for id in params.outgroup:
+            include_id.remove(id)
         with open(output.tsv, "w") as out:
             out.write("#FID\tIID\n")
             for id in include_id:
@@ -148,7 +245,7 @@ rule keepfile:
 
 rule plink2_indep:
     input:
-        vcf = "{dir}/leopardus.vcf.gz".format(dir = config["output"]["vcf"]),
+        vcf = "{dir}/leopardus_repeatmasked.vcf.gz".format(dir = config["output"]["vcf"]),
         tsv = "{dir}/plink2/keep.tsv".format(dir = config["output"]["vcf"])
     output:
         prune_in = temp("{dir}/plink2/leopardus.prune.in".format(dir = config["output"]["vcf"])),
@@ -162,7 +259,7 @@ rule plink2_indep:
 
 rule plink2_afreq:
     input:
-        vcf = "{dir}/leopardus.vcf.gz".format(dir = config["output"]["vcf"]),
+        vcf = "{dir}/leopardus_repeatmasked.vcf.gz".format(dir = config["output"]["vcf"]),
         tsv = "{dir}/plink2/keep.tsv".format(dir = config["output"]["vcf"])
     output:
         afreq = temp("{dir}/plink2/leopardus.afreq".format(dir = config["output"]["vcf"]))
@@ -174,7 +271,7 @@ rule plink2_afreq:
 
 rule plink2_pca:
     input:
-        vcf = "{dir}/leopardus.vcf.gz".format(dir = config["output"]["vcf"]),
+        vcf = "{dir}/leopardus_repeatmasked.vcf.gz".format(dir = config["output"]["vcf"]),
         prune_in = "{dir}/plink2/leopardus.prune.in".format(dir = config["output"]["vcf"]),
         afreq = "{dir}/plink2/leopardus.afreq".format(dir = config["output"]["vcf"]),
         tsv = "{dir}/plink2/keep.tsv".format(dir = config["output"]["vcf"])

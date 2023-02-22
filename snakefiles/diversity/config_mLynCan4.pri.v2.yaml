@@ -1,7 +1,7 @@
 # Config file of Snakefile diversity
 # Load environment from within jonal environment with $ conda activate diversity
 
-metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2021APR10.tsv
+metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2022NOV22.tsv
 
 ref:
     species: "Lynx canadensis"
@@ -9,8 +9,8 @@ ref:
     file: /media/labgenoma4/DATAPART7/duda_grupo/references/mLynCan4.pri.v2/GCA_007474595.2_mLynCan4.pri.v2_genomic.fna.gz
 
 input:
-    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2/unmasked/100kb40/windows
-    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2/unmasked/100kb40/filenames_informative.txt
+    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2/repeatmasked/100kb40/windows
+    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2/repeatmasked/100kb40/filenames_informative.txt
     bam_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/bam_mLynCan4.pri.v2
     auto: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/diversity_mLynCan4.pri.v2/roh/autosomes.txt # This file needs to be manually created, in the format acceptable to ROHan and for use in MSMC2
 
@@ -26,7 +26,7 @@ seqbility_dir: /media/labgenoma4/DATAPART4/jonasl/bin/seqbility-20091110
 msmc2: /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2
 
 output:
-    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/diversity_mLynCan4.pri.v2/unmasked/100kb40
+    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/diversity_mLynCan4.pri.v2/repeatmasked/100kb40
     heterozygosity: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/diversity_mLynCan4.pri.v2/heterozygosity
     roh: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/diversity_mLynCan4.pri.v2/roh
     demography: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/diversity_mLynCan4.pri.v2/demography

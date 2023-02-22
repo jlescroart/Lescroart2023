@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 ### Configuration
-configfile: "config_Lge-1.yaml"
+configfile: "config_mLynCan4.pri.v2.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -61,9 +61,10 @@ rule raxml:
     params:
         outdir = "{dir}/raxml".format(dir = config["output"]),
         outgroup = config["outgroup"],
+        optional_outgroup = config["optional_outgroup"],
         tag = "{gf}"
     shell:
-        "raxmlHPC-PTHREADS -T {threads} -s {input.maf} -w {params.outdir} -m GTRGAMMA -o {params.outgroup} -n {params.tag} -p 8 && " +
+        "raxmlHPC-PTHREADS -T {threads} -s {input.maf} -w {params.outdir} -m GTRGAMMA -o {params.outgroup}{params.optional_outgroup} -n {params.tag} -p 8 && " +
         "rm {params.outdir}/RAxML_log.{params.tag} && " +
         "rm {params.outdir}/RAxML_result.{params.tag} && " +
         "rm {params.outdir}/RAxML_parsimonyTree.{params.tag}"
@@ -114,7 +115,8 @@ rule sumtrees_raxml: # From DendroPy package
     params:
         outgroup = metadata["figure_id"][config["outgroup"]]
     shell:
-        "sumtrees.py --rooted --root-target-at-outgroup {params.outgroup} --summary-target consensus --min-clade-freq 0.0 -o {output.tre} {input.nwk}"
+        "sumtrees.py --rooted --summary-target consensus --min-clade-freq 0.0 -o {output.tre} {input.nwk}"
+#        "sumtrees.py --rooted --root-target-at-outgroup {params.outgroup} --summary-target consensus --min-clade-freq 0.0 -o {output.tre} {input.nwk}"
 
 rule sumtrees_mcct_raxml:
     input:
@@ -124,7 +126,8 @@ rule sumtrees_mcct_raxml:
     params:
         outgroup = metadata["figure_id"][config["outgroup"]]
     shell:
-        "sumtrees.py --rooted --root-target-at-outgroup {params.outgroup} --summary-target mcct -o {output.tre} {input.nwk}"
+        "sumtrees.py --rooted --summary-target mcct -o {output.tre} {input.nwk}"
+#        "sumtrees.py --rooted --root-target-at-outgroup {params.outgroup} --summary-target mcct -o {output.tre} {input.nwk}"
 
 rule astral_raxml:
     input:
@@ -135,8 +138,10 @@ rule astral_raxml:
         outgroup = metadata["figure_id"][config["outgroup"]],
         astral = config["bin"]["astral"]
     shell:
-        "java -jar {params.astral} --outgroup {params.outgroup}  -i {input.nwk} -o {output.nwk}"
+        "java -jar {params.astral} -i {input.nwk} -o {output.nwk}"
+#        "java -jar {params.astral} --outgroup {params.outgroup} -i {input.nwk} -o {output.nwk}"
 # When reporting tree, use -q option of astral to see it's score, and capture stderr with 2> some_file
+# Astral tree can be rooted only with a single outgroup. Not relevant bc the rootiing in ASTRAL is purely visual and does not affect branching and poserior support. Tree might look funky, to transform: import in FigTree, manually root, transform to cladogram.
 
 rule lsi:
     input:
@@ -247,7 +252,8 @@ rule sumtrees_mcmctree:
     params:
         outgroup = metadata["figure_id"][config["outgroup"]]
     shell:
-        "sumtrees.py -i nexus --root-target-at-outgroup {params.outgroup} --min-clade-freq=0.0 --summarize-node-ages --set-edges=mean-age -o {output.tre} {input.nex}"
+        "sumtrees.py -i nexus --rooted --min-clade-freq=0.0 --summarize-node-ages --set-edges=mean-age -o {output.tre} {input.nex}"
+#        "sumtrees.py -i nexus --root-target-at-outgroup {params.outgroup} --min-clade-freq=0.0 --summarize-node-ages --set-edges=mean-age -o {output.tre} {input.nex}"
 
 
 #neighorjoing: produces very bad results, use results NJ results from diversity pipeline instead

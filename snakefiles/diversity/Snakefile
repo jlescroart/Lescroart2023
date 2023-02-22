@@ -11,7 +11,7 @@ import skbio
 import shutil
 
 ### Configuration
-configfile: "config_Lge-1.yaml"
+configfile: "config_mLynCan4.pri.v2.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -40,9 +40,6 @@ def csv2nwk(infile_csv, outfile_nwk):
 metadata = pd.read_csv(config["metadata"], sep = "\t", engine = "python", encoding = "latin-1").set_index("unique_id", drop = False)
 unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
 
-unique_id.remove("mLynCan4") # Temporary skipping Lynx bc data is faulty
-unique_id.remove("bLge-252")
-
 genomic_fragments = pd.read_csv(config["input"]["filenames"], names = ["file"], engine = "python")
 unique_gf = [strip_ext(gf) for gf in genomic_fragments["file"].astype(str).tolist()]
 
@@ -55,11 +52,11 @@ rule all:
         #expand("{dir}/pairwise_pi/fragments/{{gf}}.nwk".format(dir = config["output"]["fragments_dir"]), gf = unique_gf),
         #"{dir}/pairwise_pi/all_NJ.nwk".format(dir = config["output"]["fragments_dir"]),
         #"{dir}/pairwise_pi/average_pairwise_pi.nwk".format(dir = config["output"]["fragments_dir"]),
-#        "{dir}/leopardus_heterozygosity.txt".format(dir = config["output"]["heterozygosity"]),
-        expand("{dir}/{{id}}.summary.txt".format(dir = config["output"]["roh"]), id = unique_id),
+        "{dir}/leopardus_heterozygosity.txt".format(dir = config["output"]["heterozygosity"]),
+#        expand("{dir}/{{id}}.summary.txt".format(dir = config["output"]["roh"]), id = unique_id),
  #       "{dir}/figure_id.done".format(dir = config["output"]["demography"]),
         #expand("{dir}/bootstrap/{{id}}_bs_20.final.txt".format(dir = config["output"]["demography"]), id = unique_id),
-        "{dir}/msmc2_bs_leopardus.pdf".format(dir = config["output"]["demography"])
+#        "{dir}/msmc2_bs_leopardus.pdf".format(dir = config["output"]["demography"])
 
 rule pairwise_pi:
     input:
@@ -159,7 +156,8 @@ rule angsd:
 
 rule angsd_realsfs:
     input:
-        idx = "{dir}/{{id}}.saf.idx".format(dir = config["output"]["heterozygosity"])
+        idx = "{dir}/{{id}}.saf.idx".format(dir = config["output"]["heterozygosity"]),
+        gz = "{dir}/{{id}}.saf.pos.gz".format(dir = config["output"]["heterozygosity"])
     output:
         ml = temp("{dir}/{{id}}.est.ml".format(dir = config["output"]["heterozygosity"]))
     threads: 3

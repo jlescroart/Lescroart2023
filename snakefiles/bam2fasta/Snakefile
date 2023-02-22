@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 ### Configuration
-configfile: "config_Lge-1.yaml"
+configfile: "config_mLynCan4.pri.v2.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -39,10 +39,10 @@ for id in config["exclude"]:
 ### Rules
 rule all:
     input:
-        expand("{dir}/unmasked/diagnose_fasta/{{id}}.info".format(dir = config["output"]["fasta"]), id = unique_id),
-        #expand("{dir}/repeatmasked/diagnose_fasta/{{id}}.info".format(dir = config["output"]["fasta"]), id = unique_id),
-        "{dir}/unmasked/{size}kb{cutoff}/summary_{cutoff}.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"]),
-        #"{dir}/repeatmasked/{size}kb{cutoff}/summary_{cutoff}.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"])
+        #expand("{dir}/unmasked/diagnose_fasta/{{id}}.info".format(dir = config["output"]["fasta"]), id = unique_id),
+        expand("{dir}/repeatmasked/diagnose_fasta/{{id}}.info".format(dir = config["output"]["fasta"]), id = unique_id),
+        #"{dir}/unmasked/{size}kb{cutoff}/summary_{cutoff}.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"]),
+        "{dir}/repeatmasked/{size}kb{cutoff}/summary_{cutoff}.txt".format(dir = config["output"]["fasta"], size = windowsizekb, cutoff = config["cutoff"])
 
 rule idxstats:
     input:
