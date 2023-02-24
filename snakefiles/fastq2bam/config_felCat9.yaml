@@ -1,8 +1,9 @@
 # Config file of Snakefile fastq2bam
 # Load environment from within jonasl environment with $ conda activate fastq2bam
 
+metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2023FEB22.tsv
 metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2021APR10.tsv
-exclude: ["mLynCan4", "bLge-252", 'Lcol1CL', 'LTI-6', 'LTI-13', 'LTI-32454', 'LPA-6', 'LP339']
+exclude: ["Fch-1a", "LYNX9", "PBE_2350", 'Lcol1CL', 'LTI-6', 'LTI-13', 'LTI-32454', 'LPA-6', 'LP339']
 #exclude: ["mLynCan4", "bLge-252", '398-wiedii', 'LJA1', 'LTI699', 'Lcol1CL', 'Lgui1CL', 'LTI-6', 'LTI-13', 'LTI-32451', 'LTI-32454', 'GU_18963', 'PumCon1.0']
 
 ref:

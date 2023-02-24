@@ -1,7 +1,8 @@
 # Config file of Snakefile diversity
 # Load environment from within jonal environment with $ conda activate diversity
 
-metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2022NOV22.tsv
+metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2023FEB22.tsv
+exclude: ["Fch-1a"]
 
 ref:
     species: "Lynx canadensis"

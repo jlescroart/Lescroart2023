@@ -1,7 +1,7 @@
 # Config file of Snakefile fastq2bam
 # Load environment from within jonasl environment with $ conda activate fastq2bam
 
-metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2022NOV22.tsv
+metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2023FEB22.tsv
 exclude: []
 
 ref:

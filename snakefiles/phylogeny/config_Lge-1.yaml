@@ -1,8 +1,8 @@
 # Config file of Snakefile phylogeny
 # Load environment from within jonasl environment with $ conda activate phylogeny
 
-metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2021APR10.tsv
-exclude: ["mLynCan4", "bLge-252", 'LTI-6', 'LCO-3', 'LTI-13', 'LTI-32454', 'LP339', 'LPA-6']
+metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2023FEB22.tsv
+exclude: ["LYNX9", "PBE_2350", 'LTI-6', 'LCO-3', 'LTI-13', 'LTI-32454', 'LP339', 'LPA-6']
 
 ref:
     species: "Leopardus geoffroyi"
@@ -16,6 +16,8 @@ input:
 output: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/phylogeny_Lge-1_pruned/unmasked/100kb40
 
 outgroup: "PumCon1.0"
+#optional_outgroup: "" # Use empty string here for 1 outgroup, use ",TAXON_LABEL" to use a second outgroup.
+optional_outgroup: ",Fch-1a"
 
 bin:
     astral: /media/labgenoma4/DATAPART4/jonasl/bin/ASTRAL/Astral.5.7.8/astral.5.7.8.jar
