@@ -16,5 +16,5 @@ LTI-32454	14	Leopardus	tigrinus	pardinoides	Ltigrinus_pardinoides_32454		female	
 GU_18963	15	Leopardus	guttulus		Lguttulus_brazil		male	Brazil				PUCRS?					GU_18963_R{}.fastq.gz	151					/media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/GU_18963
 PumCon1.0	16	Puma	concolor		Puma_concolor		male	USA				SRA		blood			SRR7148345-51.1_{}.fastq.gz	100	SC36_Marlon			SRX40678[34-40]	/media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/PumCon1.0
 Fch-1a	17	Felis	chaus		Felis_chaus			unkown				SRA		fibroblast cell culture			SRR13340505_{}.fastq.gz	150	FCH-1a			SRX9766946	/media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/Fch-1a
-LYNX9	18	Lynx	pardinus		Lynx_pardinus			Spain				SRA					ERR1255583-84_{}.fastq.gz	100	A010			ERX1327192	/media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/LYNX9
-AJU42	19	Acinonyx	jubatus		Acinonyx_jubatus			Algeria				SRA		tissue			SRR19760963-64_{}.fastq.gz	151	P11511			SRX15805600	/media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/AJU42
+LYNX9	18	Lynx	pardinus		Lynx_pardinus			Spain				SRA					ERR1255583-6_{}.fastq.gz	100	A010-Borja			ERX1327192	/media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/LYNX9
+PBE_2350	19	Prionailurus	bengalensis		Prionailurus_bengalensis			Tierpark Berlin				SRA					SRR12381824-5_{}.fastq.gz	126	PBE_2350_Denovo			SRX8880503-4	/media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/PBE_2350
