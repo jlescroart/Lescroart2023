@@ -32,7 +32,8 @@ for id in config["exclude"]:
 unique_chr = []
 ref_fai = pd.read_csv("{ref}.fna.fai".format(ref = strip_ext(config["ref"]["file"])), sep = "\t", engine = "python", names = ["chromosome", "2", "3", "4", "5"]).set_index("chromosome", drop = False)
 for chr in ref_fai["chromosome"]:
-    if config["ref"]["chromosome_tag"] in chr:
+#    if config["ref"]["chromosome_tag"] in chr:
+    if config["ref"]["contig_tag"] not in chr:
         unique_chr.append(chr)
 if config["ref"]["MT"] in unique_chr:
     unique_chr.remove(config["ref"]["MT"])
@@ -42,15 +43,10 @@ for chr in config["ref"]["sex_chr"]:
         autosomes.remove(chr)
 del chr
 
-#for testing
-
 ### Rules
 rule all:
     input:
-        #"{dir}/bam_list.txt".format(dir = config["output"]["vcf"]),
-        #"{dir}/all.{ref}.bcf".format(dir = config["output"]["vcf"], ref = config["ref"]["assembly"]),
-        #"{dir}/total_depth.txt".format(dir = config["output"]["vcf"])
-        #expand("{dir}/{{chr}}.vcf.gz".format(dir = config["output"]["vcf"]), chr = unique_chr),
+#        expand("{dir}/{{chr}}.vcf.gz".format(dir = config["output"]["vcf"]), chr = unique_chr),
         "{dir}/leopardus_unmasked.html".format(dir = config["output"]["vcf"]),
         "{dir}/leopardus_autosomal.html".format(dir = config["output"]["vcf"]),
         "{dir}/leopardus_repeatmasked.html".format(dir = config["output"]["vcf"]),
@@ -246,6 +242,7 @@ rule keepfile:
 rule plink2_indep:
     input:
         vcf = "{dir}/leopardus_repeatmasked.vcf.gz".format(dir = config["output"]["vcf"]),
+        tbi = "{dir}/leopardus_repeatmasked.vcf.gz.tbi".format(dir = config["output"]["vcf"]),
         tsv = "{dir}/plink2/keep.tsv".format(dir = config["output"]["vcf"])
     output:
         prune_in = temp("{dir}/plink2/leopardus.prune.in".format(dir = config["output"]["vcf"])),

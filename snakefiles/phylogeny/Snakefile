@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 ### Configuration
-configfile: "config_mLynCan4.pri.v2.yaml"
+configfile: "config_Lge-1.yaml"
 
 ### Functions
 def strip_ext(file_str): 
@@ -26,10 +26,6 @@ unique_id = [id for id in metadata["unique_id"].astype(str).tolist()]
 
 for id in config["exclude"]:
     unique_id.remove(id)
-
-# Working with a pruned sample set that contains only one sample per taxon
-excluded_id = ["LPA-6", "LP339", "LCO-3", "LTI-32454", "LTI-6", "LTI-13", "bLge-252"]
-unique_id = [id for id in unique_id if id not in excluded_id]
 
 figure_id = [metadata.loc[id]["figure_id"] for id in unique_id]
 

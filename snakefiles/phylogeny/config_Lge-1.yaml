@@ -2,7 +2,7 @@
 # Load environment from within jonasl environment with $ conda activate phylogeny
 
 metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2023FEB22.tsv
-exclude: ["LYNX9", "PBE_2350", 'LTI-6', 'LCO-3', 'LTI-13', 'LTI-32454', 'LP339', 'LPA-6']
+exclude: ["Fch-1a", "LYNX9", "PBE_2350"]
 
 ref:
     species: "Leopardus geoffroyi"
@@ -10,14 +10,14 @@ ref:
     file: /media/labgenoma4/DATAPART7/duda_grupo/references/Lge_Assembly_v1/Lge-1_final.fna.gz
 
 input:
-    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1_pruned/unmasked/100kb40/windows
-    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1_pruned/unmasked/100kb40/filenames_informative.txt
+    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1/repeatmasked/100kb40/windows
+    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1/repeatmasked/100kb40/filenames_informative.txt
 
-output: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/phylogeny_Lge-1_pruned/unmasked/100kb40
+output: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/phylogeny_Lge-1/repeatmasked/100kb40
 
 outgroup: "PumCon1.0"
 #optional_outgroup: "" # Use empty string here for 1 outgroup, use ",TAXON_LABEL" to use a second outgroup.
-optional_outgroup: ",Fch-1a"
+optional_outgroup: ""
 
 bin:
     astral: /media/labgenoma4/DATAPART4/jonasl/bin/ASTRAL/Astral.5.7.8/astral.5.7.8.jar

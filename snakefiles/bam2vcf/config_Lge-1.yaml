@@ -7,11 +7,11 @@ exclude: ["Fch-1a"]
 ref:
     species: "Leopardus geoffroyi"
     assembly: "Lge-1"
-    chromosome_tag: "chr"
+    contig_tag: "scaffold"
     MT: ""
     sex_chr: ["chrX"]
     file: /media/labgenoma4/DATAPART7/duda_grupo/references/Lge_Assembly_v1/Lge-1_final.fna.gz
-    repeatmasker_out: /media/labgenoma4/DATAPART7/duda_grupo/references/Lge-1_final_rm.out.gz
+    repeatmasker_out: /media/labgenoma4/DATAPART7/duda_grupo/references/Lge_Assembly_v1/Lge-1_final_rm.out.gz
 
 outgroup: ["PumCon1.0", "LYNX9", "PBE_2350"]
 

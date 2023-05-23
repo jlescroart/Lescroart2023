@@ -98,6 +98,14 @@ rule trim:
         "{input.fq1} {input.fq2} {output.fq1_pe} {output.fq1_se} {output.fq2_pe} {output.fq2_se} " +
         "ILLUMINACLIP:{params.libr}:2:30:10:2:keepBothReads AVGQUAL:{params.avgqual} MINLEN:{params.minlen}"
 
+rule ref_gunzip:
+    input:
+        gz = config["ref"]["file"]
+    output:
+        fna = temp(strip_ext(config["ref"]["file"]) + ".fna")
+    shell:
+        "gunzip -c {input.gz} > {output.fna}"
+
 rule ref_index:
     input:
         ref = config["ref"]["file"]
@@ -106,6 +114,14 @@ rule ref_index:
     threads: 3
     shell:
         "minimap2 -x sr -t {threads} -d {output.mmi} {input.ref}"
+
+rule ref_samtools:
+    input:
+        fna = strip_ext(config["ref"]["file"]) + ".fna"
+    output:
+        fna = strip_ext(config["ref"]["file"]) + ".fna.fai"
+    shell:
+        "samtools faidx {input.fna}"
 
 rule minimap2:
     input:

@@ -2,7 +2,8 @@
 # Load environment from within jonasl environment with $ conda activate phylogeny
 
 metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2023FEB22.tsv
-exclude: ["LYNX9", "PBE_2350", 'LTI-6', 'LCO-3', 'LTI-13', 'LTI-32454', 'LP339', 'LPA-6']
+exclude: ["LYNX9", "PBE_2350"]
+#exclude: ["LYNX9", "PBE_2350", 'LTI-6', 'LCO-3', 'LTI-13', 'LTI-32454', 'LP339', 'LPA-6']
 
 ref:
     species: "Lynx Canadensis"
@@ -10,10 +11,10 @@ ref:
     file: /media/labgenoma4/DATAPART7/duda_grupo/references/mLynCan4.pri.v2/GCA_007474595.2_mLynCan4.pri.v2_genomic.fna.gz
 
 input:
-    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2_pruned/repeatmasked/100kb40/windows
-    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2_pruned/repeatmasked/100kb40/filenames_informative.txt
+    fragments_dir: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2/repeatmasked/100kb40/windows
+    filenames: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_mLynCan4.pri.v2/repeatmasked/100kb40/filenames_informative.txt
 
-output: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/phylogeny_mLynCan4.pri.v2_pruned/repeatmasked/100kb40
+output: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/phylogeny_mLynCan4.pri.v2/repeatmasked/100kb40
 
 outgroup: "PumCon1.0"
 #optional_outgroup: "" # Use empty string here for 1 outgroup, use ",TAXON_LABEL" to use a second outgroup.

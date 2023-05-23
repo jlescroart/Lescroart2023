@@ -73,7 +73,7 @@ https://conda.anaconda.org/conda-forge/linux-64/make-4.3-hd18ef5c_1.tar.bz2
 https://conda.anaconda.org/conda-forge/linux-64/metis-5.1.0-he1b5a44_1006.tar.bz2
 https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.2-h58526e2_4.tar.bz2
 https://conda.anaconda.org/conda-forge/linux-64/nspr-4.30-h9c3ff4c_0.tar.bz2
-https://repo.anaconda.com/pkgs/main/linux-64/openssl-1.1.1s-h7f8727e_0.conda
+https://repo.anaconda.com/pkgs/main/linux-64/openssl-1.1.1t-h7f8727e_0.conda
 https://repo.anaconda.com/pkgs/main/linux-64/pcre-8.45-h295c915_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/perl-5.26.2-h36c2ea0_1008.tar.bz2
 https://conda.anaconda.org/conda-forge/linux-64/pixman-0.40.0-h36c2ea0_0.tar.bz2
@@ -448,6 +448,7 @@ https://conda.anaconda.org/conda-forge/linux-64/wrapt-1.12.1-py39h3811e60_3.tar.
 https://conda.anaconda.org/conda-forge/linux-64/yarl-1.5.1-py39h07f9747_0.tar.bz2
 https://conda.anaconda.org/conda-forge/linux-64/aiohttp-3.7.4.post0-py39h3811e60_0.tar.bz2
 https://conda.anaconda.org/conda-forge/noarch/backports.functools_lru_cache-1.6.4-pyhd8ed1ab_0.tar.bz2
+https://conda.anaconda.org/bioconda/linux-64/bedops-2.4.39-h7d875b9_1.tar.bz2
 https://conda.anaconda.org/conda-forge/linux-64/biopython-1.79-py39h3811e60_0.tar.bz2
 https://conda.anaconda.org/conda-forge/linux-64/boost-1.74.0-py39h5472131_3.tar.bz2
 https://repo.anaconda.com/pkgs/main/linux-64/brotlipy-0.7.0-py39h27cfd23_1003.conda

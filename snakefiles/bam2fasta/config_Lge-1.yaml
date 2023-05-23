@@ -2,7 +2,8 @@
 # Load environment from within jonasl environment with $ conda activate bam2fasta
 
 metadata: /media/labgenoma4/DATAPART7/duda_grupo/raw_data/genomes/genomes_metadata_2023FEB22.tsv
-exclude: ['Fch-1a', 'LYNX9', 'PBE_2350', 'LTI-6', 'LCO-3', 'LTI-13', 'LTI-32454', 'LP339', 'LPA-6']
+exclude: ['Fch-1a', 'LYNX9', 'PBE_2350']
+#exclude: ['Fch-1a', 'LYNX9', 'PBE_2350', 'LTI-6', 'LCO-3', 'LTI-13', 'LTI-32454', 'LP339', 'LPA-6']
 
 ref:
     species: "Leopardus geoffroyi"
@@ -15,7 +16,7 @@ input:
     bam: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/bam_Lge-1 
 
 output:
-    fasta: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1_pruned
+    fasta: /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/fasta_Lge-1
 
 scripts:
     createWindow_aln: /media/labgenoma4/DATAPART4/jonasl/scripts/createWindow_aln_JL.py
