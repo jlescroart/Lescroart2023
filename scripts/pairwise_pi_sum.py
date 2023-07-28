@@ -2,19 +2,21 @@
 
 """
 DESCRIPTION
-Script to sum and average per-site pairwise nucleotide differences (π).
+Script to sum per-site pairwise nucleotide differences (π).
+Used to take the average, but a sum is weighted and therefore more accurate.
 Input is a series of csv files generated with pairwise_pi.py,
 or text file listing the path to csv files one per line.
 Output is a matrix of average pi values in csv format,
 printed to screen or to file with -o option.
 
 USAGE
-python3 pairwise_pi_plot.py --help
-python3 pairwise_pi_plot.py -l filenames.txt -o outfile.csv
+python3 pairwise_pi_sum.py --help
+python3 pairwise_pi_sum.py -l filenames.txt -o outfile.csv
 or
-python3 pairwise_pi_plot.py -i file1.csv file2.csv -o outfile.csv
+python3 pairwise_pi_sum.py -i file1.csv file2.csv -o outfile.csv
 
-Version: 18 January 2021
+Created 18JAN21
+Update 28FEB23 - sum instead of average, abandon intention to plot results (use THEx instead)
 Author: Jonas Lescroart
 """
 
@@ -62,26 +64,11 @@ for i in range(len(infiles)):
     else:
         if "total" not in globals():
             total = csv
-            counter = 1
         else:
             assert csv.index.values.tolist() == total.index.values.tolist()
             assert csv.columns.values.tolist() == total.columns.values.tolist()
             total += csv
-            counter += 1
 
-# Output average pi values
-average = total/counter
-average.to_csv(outfile)
-
-# NJ tree from distance matrix. Now implemented as function directly in the Snakefile so redundant here.
-#import skbio
-
-#distance_matrix = skbio.DistanceMatrix(average, ids = average.index.values.tolist())
-#nj_newick = skbio.nj(distance_matrix, result_constructor=str)
-#with open(outfile[:-4]+".nwk", "w") as nwk:
-#    nwk.write(nj_newick)
-
-# Add bootsstrap later
-
-# Add plots
+# Output sum pi values
+total.to_csv(outfile)
 
