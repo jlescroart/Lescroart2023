@@ -1,0 +1,127 @@
+Log file for exploring demographic reconstruction of WGS with MSMC2
+Author: Jonas Lescroart
+
+### RESOURCES
+GitHub: https://github.com/stschiff/msmc2
+Reference: Wang, Ke, Iain Mathieson, Jared O’Connell, and Stephan Schiffels. 2020. “Tracking Human Population Structure through Time from Whole Genome Sequences.” PLoS Genetics 16 (3): e1008552.
+
+Other useful scripts:
+> https://github.com/stschiff/msmc-tools
+> https://github.com/jessicarick/msmc2_scripts
+> https://lh3lh3.users.sourceforge.net/snpable.shtml
+> https://github.com/grenaud/mappability_snpable
+> https://github.com/wangke16/MSMC-IM
+
+For tutorials see (the one in the textbook is the best one):
+> Schiffels, Stephan, and Ke Wang. 2020. “MSMC and MSMC2: The Multiple Sequentially Markovian Coalescent.” In Statistical Population Genomics, edited by Julien Y. Dutheil, 2090:147–66. Methods in Molecular Biology. New York, NY: Springer US.
+> https://github.com/stschiff/msmc-tools/blob/master/msmc-tutorial/guide.md
+> https://github.com/stschiff/msmc/blob/master/guide.md
+> For some guidance on MSMC-IM, see Fig. S12 in https://doi.org/10.1038/s41559-022-01753-8
+
+
+### NOTE
+Code for MSMC2 and its bootstrap/consensus runs are integrated in the Diversity Snakefile.
+Computation of the rCCR and MSMC-IM are not.
+
+
+### INSTALLATION
+$ git clone https://github.com/stschiff/msmc2.git
+
+During installation, change path to GSL in Makefile of msmc2 folder to /apps/conda/pkgs/gsl-2.7.1-hd82f3ee_0/lib
+
+$ make
+
+$ /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2
+
+
+### PREPARING INPUT FILES
+Recover chromosome depth, needed to run bamCaller.py
+$ samtools depth -r CM017330.2 LP339.filtered.bam | awk '{sum += $3} END {print sum / NR}'
+
+chr depth is 18.254
+Produce a vcf file and a mask file, both sample-specific as well as chromosome-specific. These are needed for the msmc analysis for all chromosomes, which are then ran for a single sample.
+$ samtools mpileup -q 20 -Q 20 -C 50 -u -r CM017330.2 -f /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/reference/GCA_007474595.2_mLynCan4.pri.v2_genomic.fna /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/bam_mLynCan4.pri.v2/LP339.filtered.bam | bcftools call -c -V indels | /media/labgenoma4/DATAPART4/jonasl/bin/msmc-tools/bamCaller.py 18.254 LP339_mask.bed.gz | gzip -c > /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/LP339.vcf.gz
+
+A third type of input is needed, the mappability mask, which is specific to the reference genome and needs to be generated with SNPable.
+To get the collection of SNPable scripts:
+$ wget http://lh3lh3.users.sourceforge.net/download/seqbility-20091110.tar.bz2
+$ tar -xvjf seqbility-20091110.tar.bz2
+$ cd seqbility-20091110 && make
+
+Script to run SNPable:
+$ wget https://github.com/grenaud/mappability_snpable/blob/main/snpable.bash
+
+To run SNPable:
+Change threads used by BWA (-t) in snpable.sh script
+$ bash /media/labgenoma4/DATAPART4/jonasl/scripts/snpable.sh /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/reference/GCA_007474595.2_mLynCan4.pri.v2_genomic.fna /media/labgenoma4/DATAPART4/jonasl/bin/seqbility-20091110
+
+Retrieve collection of msmc(2) helper scripts:
+$ git clone https://github.com/stschiff/msmc-tools.git
+
+Generate msmc input files (multihetsep files) from the mask files and VCFs
+$ /media/labgenoma4/DATAPART4/jonasl/bin/msmc-tools/generate_multihetsep.py --mask /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/reference/mappable_99.bed.gz --mask /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/LP339_mask.bed.gz /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/LP339.vcf.gz > /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/LP339_multihetsep.txt
+
+
+### MSMC2
+Run msmc2
+$ /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2 --nrThreads 10 -o LP339 LP339_chrA1_multihetsep.txt LP339_chrA2_multihetsep.txt ...
+
+
+### BOOTSTRAP
+20 bootstraps:
+$ /media/labgenoma4/DATAPART4/jonasl/bin/msmc-tools/multihetsep_bootstrap.py -n 20 --nr_chromosomes 2 --seed 8 /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/bootstrap/LTI-6_bs /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/LTI-6_chrB2_multihetsep.txt /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/LTI-6_chrC3_multihetsep.txt 
+
+$ for i in {1..20}; do /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2 --nrThreads 1 -o /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/bootstrap/LTI-6_bs$i /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/bootstrap/LTI-6_bs_$i/bootstrap*.txt; done
+
+
+### RELATIVE CROSS-COALESCENT RATE (rCCR)
+$ for CHR in chrA1 chrA2 chrA3 chrB1 chrB2 chrB3 chrB4 chrC1 chrC2 chrC3 chrD1 chrD2 chrD3 chrD4 chrE1 chrE2 chrE3; do python /media/labgenoma4/DATAPART4/jonasl/bin/msmc-tools/generate_multihetsep.py --mask /media/labgenoma4/DATAPART4/jonasl/data/leopardus_phylogeny/diversity_Lge-1/demography/mappability/mappable_99.bed.gz --mask LTI-32451_${CHR}_mask.bed.gz --mask LTI-13_${CHR}_mask.bed.gz LTI-32451_${CHR}.vcf.gz LTI-13_${CHR}.vcf.gz > LTI-32451_LTI-13_${CHR}_multihetsep.txt; done
+
+$ /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2 -t 5 -s -I 0,1 -o pardinoides LTI-32451_LTI-13_chr*_multihetsep.txt
+$ /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2 -t 5 -s -I 2,3 -o oncilla LTI-32451_LTI-13_chr*_multihetsep.txt
+$ /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2 -t 5 -s -I 0-2,0-3,1-2,1-3 -o pardinoides_oncilla LTI-32451_LTI-13_chr*_multihetsep.txt
+
+$ /media/labgenoma4/DATAPART4/jonasl/bin/msmc-tools/combineCrossCoal.py pardinoides_oncilla.final.txt pardinoides.final.txt oncilla.final.txt > combined_pardinoides_oncilla.final.txt
+
+
+### rCCR BOOTSTRAP
+$ python /media/labgenoma4/DATAPART4/jonasl/bin/msmc-tools/multihetsep_bootstrap.py -n 20 --nr_chromosomes 17 --seed 8 /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/LTI-32451_LTI-13_bs /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/LTI-32451_LTI-13_chr*_multihetsep.txt
+
+$ for i in {1..20}; do /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2 -t 10 -s -I 0,1 -p 1*2+20*1+1*2+1*3 -o /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/pardinoides_bs_$i /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/LTI-32451_LTI-13_bs_$i/bootstrap*.txt; done
+
+$ for i in {1..20}; do /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2 -t 10 -s -I 2,3 -p 1*2+20*1+1*2+1*3 -o /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/oncilla_bs_$i /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/LTI-32451_LTI-13_bs_$i/bootstrap*.txt; done
+
+$ for i in {1..20}; do /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2 -t 10 -s -I 0-2,0-3,1-2,1-3  -o /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/pardinoides_oncilla_bs_$i /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/LTI-32451_LTI-13_bs_$i/bootstrap*.txt; done
+
+$ python ~/scripts/msmc2_consensus.py --input /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/oncilla_bs_*.final.txt --output /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/oncilla_consensus.final.txt
+$ python ~/scripts/msmc2_consensus.py --input /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/pardinoides_bs_*.final.txt --output /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/pardinoides_consensus.final.txt
+$ python ~/scripts/msmc2_consensus.py --input /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/pardinoides_oncilla_bs_*.final.txt --output /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/pardinoides_oncilla_consensus.final.txt
+
+$ /media/labgenoma4/DATAPART4/jonasl/bin/msmc-tools/combineCrossCoal.py pardinoides_oncilla_consensus.final.txt pardinoides_consensus.final.txt oncilla_consensus.final.txt > combined_pardinoides_oncilla_consensus.final.txt
+
+
+### TIME PATTERNING PARAMETER SWEEP
+Parameter sweep to reduce free parameters in time patterning (see subtitle 'Controlling Time Patterning' in Statistical Population Genomics textbook tutorial):
+default, 32 time segments in 28 free parameters:
+$ /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2 --nrThreads 5 -p 1*2+25*1+1*2+1*3 -o OGE-3_28 OGE-3_chr*_multihetsep.txt
+
+hard reduction as in textbook, 20 time segments in 18 free paramters
+$ /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2 --nrThreads 5 -p 1*2+16*1+1*2 -o OGE-3_18 OGE-3_chr*_multihetsep.txt
+
+intermediate, 29 segments with 27 free
+$ /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2 --nrThreads 5 -p 1*2+25*1+1*2 -o OGE-3_27 OGE-3_chr*_multihetsep.txt
+
+intermediate, 27 segments with 23 free
+$ /media/labgenoma4/DATAPART4/jonasl/bin/msmc2/build/release/msmc2 --nrThreads 5 -p 1*2+20*1+1*2+1*3 -o OGE-3_23 OGE-3_chr*_multihetsep.txt
+
+Last one performs best in terms of balance between information and overfitting.
+
+
+### MSMC-IM
+Same mutation rate as MSMC2 runs. N1 and N2 are initial values for Ne of population 1 and population 2. I use the harmonic mean of their respective MSMC2 consensus runs.
+$ python3 /media/labgenoma4/DATAPART4/jonasl/bin/MSMC-IM/MSMC_IM.py -mu 0.86e-8 -N1 52064 -N2 39183 -p 1*2+25*1+1*2+1*3 -beta 0.8e-8,1e-6 -o /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/MSMC-IM/combined_pardinoides_oncilla_consensus --printfittingdetails --plotfittingdetails --xlog /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/combined_pardinoides_oncilla_consensus.final.txt
+
+$ python3 /media/labgenoma4/DATAPART4/jonasl/bin/MSMC-IM/MSMC_IM.py -mu 0.86e-8 -N1 52064 -N2 39183 -p 1*2+18*1+1*2+1*3 -beta 0.8e-8,1e-6 -o /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/MSMC-IM/combined_pardinoides_oncilla_consensus_trunc --printfittingdetails --plotfittingdetails --xlog /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/combined_pardinoides_oncilla_consensus_trunc.final.txt 
+
+$ BETA PARAMETER SWEEP
+$ for b in 1e-6,1e-2 1e-6,1e-4 1e-6,1e-6 1e-7,1e-2 1e-7,1e-4 1e-7,1e-6 1e-8,1e-2 1e-8,1e-4 1e-8,1e-6 1e-9,1e-2 1e-9,1e-4 1e-9,1e-6; do python3 /media/labgenoma4/DATAPART4/jonasl/bin/MSMC-IM/MSMC_IM.py -mu 0.86e-8 -N1 52064 -N2 39183 -p 1*2+25*1+1*2+1*3 -beta $b -o /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/MSMC-IM/beta_sweep --printfittingdetails --plotfittingdetails --xlog /media/labgenoma4/DATAPART4/jonasl/sandbox/msmc2/rCCR/bootstrap/combined_pardinoides_oncilla_consensus.final.txt; done
