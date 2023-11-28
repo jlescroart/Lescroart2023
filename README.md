@@ -6,7 +6,9 @@ Snakemake code consists of six interlinked pipelines: (1) QC and mapping of raw 
 
 ### Full citation:
 
-Lescroart, J., Bonilla-Sánchez, A., Napolitano, C., Buitrago-Torres, D. L., Ramírez-Chaves, H. E., Pulido-Santacruz, P., Murphy, W. J., Svardal, H., Eizirik, E. (2023). Extensive phylogenomic discordance and the complex evolutionary history of the Neotropical cat genus *Leopardus*. *Molecular Biology and Evolution*, msad255. doi: [10.1093/molbev/msad255](https://doi.org/10.1093/molbev/msad255).
+Lescroart, J., Bonilla-Sánchez, A., Napolitano, C., Buitrago-Torres, D. L., Ramírez-Chaves, H. E., Pulido-Santacruz, P., Murphy, W. J., Svardal, H., Eizirik, E. (2023). Extensive phylogenomic discordance and the complex evolutionary history of the Neotropical cat genus *Leopardus*. *Molecular Biology and Evolution*, msad255. DOI: [10.1093/molbev/msad255](https://doi.org/10.1093/molbev/msad255).
+
+A poster presentation / graphical abstract is available on ResearchGate: [10.13140/RG.2.2.25172.78725](http://dx.doi.org/10.13140/RG.2.2.25172.78725)
 
 ### Abstract:
 
